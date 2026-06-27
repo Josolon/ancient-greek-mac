@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.jonatansolon.dictionary.AncientGreek</string>
+	<key>CFBundleName</key>
+	<string>Ancient Greek</string>
+	<key>CFBundleDisplayName</key>
+	<string>Ancient Greek (LSJ)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>DCSDictionaryCopyright</key>
+	<string>Curated by Jonatan Solon</string>
+	<key>DCSDictionaryManufacturerName</key>
+	<string>Jonatan Solon</string>
+	<key>DCSDictionaryFrontMatterWindowSize</key>
+	<string>0.5</string>
+</dict>
+</plist>

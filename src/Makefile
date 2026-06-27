@@ -1,0 +1,40 @@
+#
+# Safe Makefile for Ancient Greek Dictionary Build
+#
+
+.PHONY: all install clean
+
+# 1. Safe, space-free filesystem name for compiling
+DICT_NAME        = AncientGreekDictionary
+DICT_SRC_PATH    = GreekDictionary.xml
+DICT_CSS_PATH    = GreekDictionary.css
+DICT_PLIST_PATH  = GreekDictionary.plist
+
+# 2. Your Computer-Wide Compiler Path
+DICT_DEV_KIT_OBJ_DIR = /Applications/XcodeAdditionalTools/Utilities/DictionaryDevelopmentKit
+DICT_BUILD_TOOL_DIR  = $(DICT_DEV_KIT_OBJ_DIR)/bin
+
+# 3. System & Target Installation Paths
+MIN_OS_VERSION   = 10.6
+export MACOSX_DEPLOYMENT_TARGET=$(MIN_OS_VERSION)
+DICT_BUILD_DIR   = ./objects
+BUILD_DICT_XML   = $(DICT_BUILD_TOOL_DIR)/build_dict.sh
+
+# TARGET DIR: Maps natively to /Users/jonatansolon/Library/Dictionaries
+INSTALL_DIR      = $(HOME)/Library/Dictionaries
+
+all:
+	@echo "🏗️  Compiling macOS Dictionary (Safe-Name Mode)..."
+	"$(BUILD_DICT_XML)" "$(DICT_NAME)" $(DICT_SRC_PATH) $(DICT_CSS_PATH) $(DICT_PLIST_PATH)
+
+install: all
+	@echo "🚀 Automatically moving bundle to $(INSTALL_DIR)..."
+	mkdir -p "$(INSTALL_DIR)"
+	rm -rf "$(INSTALL_DIR)/$(DICT_NAME).dictionary"
+	cp -R "objects/$(DICT_NAME).dictionary" "$(INSTALL_DIR)/"
+	@echo "✅ Installed successfully! Refresh your Dictionary app Settings."
+
+clean:
+	@echo "🧹 Cleaning up build artifacts..."
+	$(RM) -rf $(DICT_BUILD_DIR)
+	$(RM) -rf "$(DICT_NAME).dictionary"

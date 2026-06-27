@@ -216,3 +216,34 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# macOS system clutter
+.DS_Store
+
+# Ignore the heavy SQLite databases
+data/lsj.db
+data/morph.db
+
+# Ignore the massive Perseus XML repository we are about to clone
+data/lexica/
+
+# Ignore Apple Dictionary Development Kit build artifacts
+src/objects/
+src/*.dictionary
+
+# macOS system clutter
+.DS_Store
+
+# Ignore all heavy SQLite databases
+data/lsj.db
+data/morph.db
+data/texts.db
+
+# Ignore the massive Perseus XML repository
+data/lexica/
+
+# Ignore the 200MB generated dictionary source XML
+src/GreekDictionary.xml
+
+# Ignore Apple Dictionary Development Kit build artifacts
+src/objects/
+src/*.dictionary
