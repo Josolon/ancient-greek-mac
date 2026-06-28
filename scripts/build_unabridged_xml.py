@@ -45,15 +45,66 @@ def strip_greek_vowel_lengths(text):
     filtered = "".join(ch for ch in decomposed if ord(ch) not in (0x0304, 0x0306))
     return unicodedata.normalize('NFC', filtered)
 
-ROMAN_NUM_RE = re.compile(r'^[IVXivx]+\.?$')
+def normalize_grave_to_acute(text):
+    """Converts grave accents to acute so text-selection Look Up matches dictionary entries."""
+    if not text: return ""
+    decomposed = unicodedata.normalize('NFD', text)
+    normalized = decomposed.replace('\u0300', '\u0301')  # grave → acute
+    return unicodedata.normalize('NFC', normalized)
 
-def parse_sense_node(node, depth=0):
+def strip_all_greek_accents(text):
+    """Strips every combining diacritic for fully accent-insensitive fallback lookup."""
+    if not text: return ""
+    # Combining: grave 0300, acute 0301, circumflex 0302, macron 0304, breve 0306,
+    # diaeresis 0308, smooth breathing 0313, rough breathing 0314, iota subscript 0345
+    STRIP = {0x0300,0x0301,0x0302,0x0304,0x0306,0x0308,0x0313,0x0314,0x0345}
+    decomposed = unicodedata.normalize('NFD', text)
+    filtered = "".join(ch for ch in decomposed if ord(ch) not in STRIP)
+    return unicodedata.normalize('NFC', filtered)
+
+ROMAN_NUM_RE = re.compile(r'^[IVXivx]+\.?$')
+ARABIC_NUM_RE = re.compile(r'^\d+\.?$')
+LOWER_LETTER_RE = re.compile(r'^[a-z]\.?$')
+
+def sense_depth_from_n(n_val):
+    """Infer visual indentation depth from the TEI sense n-attribute."""
+    if not n_val:
+        return 0   # No n-attribute — treat as top-level (often definition intro)
+    n = n_val.strip().rstrip('.')
+    if ROMAN_NUM_RE.match(n):
+        return 0   # I, II, III … — top-level
+    if ARABIC_NUM_RE.match(n_val.strip()):
+        return 1   # 1, 2, 3 … — sub-sense
+    if LOWER_LETTER_RE.match(n_val.strip()):
+        return 2   # a, b, c … — sub-sub-sense
+    return 3       # anything deeper
+
+def brief_sense_text(node, max_chars=65):
+    """Extract a short plain-text snippet from a sense node for the overview."""
+    texts = []
+    if node.text:
+        texts.append(node.text.strip())
+    for child in node:
+        if child.tag.split('}')[-1] == 'sense':
+            break
+        child_text = ' '.join(child.itertext()).strip()
+        if child_text:
+            texts.append(child_text)
+        if child.tail:
+            texts.append(child.tail.strip())
+    text = clean_text_for_apple(' '.join(texts))
+    text = re.sub(r'\s+', ' ', text).strip()
+    if len(text) > max_chars:
+        text = text[:max_chars].rstrip() + '\u2026'
+    return text
+
+def parse_sense_node(node, depth=0, num_override=None):
     """
     Recursively processes mixed-content TEI sense blocks, translating
     inline language tags to clean, stylized HTML presentation layers.
     """
     sense_html = ""
-    num_marker = clean_text_for_apple(node.attrib.get('n', ''))
+    num_marker = num_override if num_override else clean_text_for_apple(node.attrib.get('n', ''))
     
     fragments = []
     if node.text:
@@ -84,22 +135,19 @@ def parse_sense_node(node, depth=0):
     inline_content = " ".join(fragments)
     inline_content = re.sub(r'\s+', ' ', inline_content).strip()
     
-    indent = depth * 20
     is_major = bool(depth == 0 and num_marker and ROMAN_NUM_RE.match(num_marker.strip()))
     
     if num_marker or inline_content:
         depth_class = f'sense-depth-{min(depth, 4)}'
         major_class = ' sense-major' if is_major else ''
-        sense_html += f'<div class="sense {depth_class}{major_class}" style="margin-left: {indent}px;">'
+        sense_html += f'<div class="sense {depth_class}{major_class}">'
         if num_marker:
             sense_html += f'<span class="sense-num">{html.escape(num_marker)}</span> '
         if inline_content:
             sense_html += f'<span class="sense-body">{inline_content}</span>'
         sense_html += '</div>'
         
-    for child in node:
-        if child.tag.split('}')[-1] == 'sense':
-            sense_html += parse_sense_node(child, depth + 1)
+    return sense_html
             
     return sense_html
 
@@ -173,6 +221,10 @@ def build_unabridged_dictionary():
                 out_xml.write(f'    <d:entry id="{entry_id}" d:title="{html.escape(safe_title)}">\n')
                 
                 search_indices = {raw_lemma, lookup_lemma}
+                # Also index grave→acute and fully unaccented forms so macOS
+                # Look Up works regardless of accent variant in running text.
+                search_indices.add(normalize_grave_to_acute(raw_lemma))
+                search_indices.add(strip_all_greek_accents(raw_lemma))
                 morph_cursor.execute("SELECT form, form_normalized, pos, tense, voice, mood, person, number, case_name FROM morphology WHERE lemma = ?", (lookup_lemma,))
                 morph_rows = morph_cursor.fetchall()
                 
@@ -182,12 +234,18 @@ def build_unabridged_dictionary():
                 
                 for mr in morph_rows:
                     f_form, f_norm, pos, tense, voice, mood, person, number, case_name = mr
-                    if f_form: 
-                        search_indices.add(clean_text_for_apple(f_form))
-                        search_indices.add(strip_greek_vowel_lengths(clean_text_for_apple(f_form)))
-                    if f_norm: 
-                        search_indices.add(clean_text_for_apple(f_norm))
-                        search_indices.add(strip_greek_vowel_lengths(clean_text_for_apple(f_norm)))
+                    if f_form:
+                        f_clean = clean_text_for_apple(f_form)
+                        search_indices.add(f_clean)
+                        search_indices.add(strip_greek_vowel_lengths(f_clean))
+                        search_indices.add(normalize_grave_to_acute(f_clean))
+                        search_indices.add(strip_all_greek_accents(f_clean))
+                    if f_norm:
+                        n_clean = clean_text_for_apple(f_norm)
+                        search_indices.add(n_clean)
+                        search_indices.add(strip_greek_vowel_lengths(n_clean))
+                        search_indices.add(normalize_grave_to_acute(n_clean))
+                        search_indices.add(strip_all_greek_accents(n_clean))
                     
                     disp_form = html.escape(clean_text_for_apple(f_form))
                     if pos == 'verb':
@@ -208,19 +266,42 @@ def build_unabridged_dictionary():
                 out_xml.write(f'        <h1 class="entry-lemma">{html.escape(raw_lemma)}</h1>\n')
                 out_xml.write('        <div class="definition">\n')
                 
-                def is_top_level_sense(s_node):
-                    curr = s_node
-                    while curr in parent_map and curr != entry:
-                        curr = parent_map[curr]
-                        if curr != entry and curr.tag.split('}')[-1] == 'sense':
-                            return False
-                    return True
+                all_senses = [c for c in entry.iter() if c.tag.split('}')[-1] == 'sense']
+
+                # Find first unnumbered sense if any (for auto-labeling as "I")
+                first_unnumbered_idx = None
+                for idx, s in enumerate(all_senses):
+                    n = clean_text_for_apple(s.attrib.get('n', ''))
+                    if not n:
+                        first_unnumbered_idx = idx
+                        break
+
+                # Build overview from Roman numeral senses
+                overview_items = []
+                for idx, s in enumerate(all_senses):
+                    num = clean_text_for_apple(s.attrib.get('n', ''))
+                    # Include first unnumbered sense as "I" in overview
+                    if idx == first_unnumbered_idx and not num:
+                        num = 'I'
+                    if num and ROMAN_NUM_RE.match(num.strip()):
+                        brief = brief_sense_text(s)
+                        if brief:
+                            overview_items.append((num, brief))
+
+                if len(overview_items) > 1:
+                    out_xml.write('        <div class="sense-overview">\n')
+                    for ov_num, ov_brief in overview_items:
+                        out_xml.write(f'          <span class="overview-item"><span class="sense-num">{html.escape(ov_num)}</span> {html.escape(ov_brief)}</span>\n')
+                    out_xml.write('        </div>\n')
 
                 definitions_html = ""
-                for child in entry.iter():
-                    if child.tag.split('}')[-1] == 'sense':
-                        if is_top_level_sense(child):
-                            definitions_html += parse_sense_node(child, depth=0)
+                for idx, s in enumerate(all_senses):
+                    n_val = clean_text_for_apple(s.attrib.get('n', ''))
+                    # Auto-label the first unnumbered sense as "I" for clarity
+                    if idx == first_unnumbered_idx and not n_val:
+                        n_val = 'I'
+                    depth = sense_depth_from_n(n_val)
+                    definitions_html += parse_sense_node(s, depth=depth, num_override=n_val)
                 
                 if not definitions_html:
                     fallback_text = "".join(entry.itertext()).strip()

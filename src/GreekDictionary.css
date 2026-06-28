@@ -48,24 +48,30 @@ div.sense-major .sense-num {
 
 div.sense-depth-0 {
     margin-top: 5px;
+    padding-left: 0;
 }
 
 div.sense-depth-1 {
     border-left: 2px solid #c8d4f0;
-    padding-left: 7px;
+    padding-left: 20px;
     margin-top: 4px;
 }
 
 div.sense-depth-2 {
     border-left: 2px solid #d8e4f8;
-    padding-left: 7px;
+    padding-left: 40px;
     margin-top: 3px;
 }
 
-div.sense-depth-3,
+div.sense-depth-3 {
+    border-left: 1px solid #e8eef8;
+    padding-left: 60px;
+    margin-top: 2px;
+}
+
 div.sense-depth-4 {
     border-left: 1px solid #e8eef8;
-    padding-left: 6px;
+    padding-left: 80px;
     margin-top: 2px;
 }
 
@@ -93,6 +99,23 @@ b.gk-word {
 span.citation {
     color: #666;
     font-size: 0.9em;
+}
+
+/* --- Sense Overview --- */
+div.sense-overview {
+    margin: 6px 0 10px 0;
+    padding: 6px 10px;
+    background: #f2f4fb;
+    border: 1px solid #dce4f4;
+    border-radius: 4px;
+    line-height: 1.9;
+    color: #333;
+    font-size: 0.92em;
+}
+
+span.overview-item {
+    display: inline;
+    margin-right: 10px;
 }
 
 /* --- Morphology Section --- */
