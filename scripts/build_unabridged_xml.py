@@ -87,22 +87,25 @@ def sense_depth_from_n(n_val):
     return 3       # anything deeper
 
 def brief_sense_text(node, max_chars=65):
-    """Extract a short plain-text snippet from a sense node for the overview."""
-    texts = []
-    if node.text:
-        texts.append(node.text.strip())
-    for child in node:
-        if child.tag.split('}')[-1] == 'sense':
-            break
-        child_text = ' '.join(child.itertext()).strip()
-        if child_text:
-            texts.append(child_text)
-        if child.tail:
-            texts.append(child.tail.strip())
-    text = clean_text_for_apple(' '.join(texts))
+    """Extract a short plain-text snippet from a sense node for the overview.
+    
+    Focuses on the initial definition, stopping before examples/citations.
+    """
+    # Extract only the main definition text, not children/examples
+    text = node.text if node.text else ""
+    text = clean_text_for_apple(text.strip())
+    
+    # Stop at common punctuation that separates definitions from examples
+    # (semicolon, comma at end of phrase, cf., etc.)
+    text = re.sub(r'\s*[,;]\s*.*$', '', text, flags=re.DOTALL)
+    text = re.sub(r'\s*(cf\.|v\.|etc\.)\s*.*$', '', text, flags=re.IGNORECASE | re.DOTALL)
+    
     text = re.sub(r'\s+', ' ', text).strip()
+    
+    # Truncate to max length
     if len(text) > max_chars:
         text = text[:max_chars].rstrip() + '\u2026'
+    
     return text
 
 def parse_sense_node(node, depth=0, num_override=None):
