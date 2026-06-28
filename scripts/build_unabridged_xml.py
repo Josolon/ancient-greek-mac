@@ -113,7 +113,11 @@ def parse_sense_node(node, depth=0, num_override=None, is_functional_header=Fals
     Recursively processes mixed-content TEI sense blocks, translating
     inline language tags to clean, stylized HTML presentation layers.
     
-    is_functional_header: If True, render as a section header (e.g., "WITH GEN. prop...")
+    Args:
+        node: The TEI sense element
+        depth: Visual indentation depth (0=top, 1=sub, 2=sub-sub, etc.)
+        num_override: Custom number label to use instead of n-attribute
+        is_functional_header: If True, render as a section header (e.g., "WITH GEN. prop...")
     """
     sense_html = ""
     num_marker = num_override if num_override else clean_text_for_apple(node.attrib.get('n', ''))
@@ -147,7 +151,7 @@ def parse_sense_node(node, depth=0, num_override=None, is_functional_header=Fals
     inline_content = " ".join(fragments)
     inline_content = re.sub(r'\s+', ' ', inline_content).strip()
     
-    # Functional headers (WITH GEN., WITH ACC., etc.) are rendered as divider sections
+    # Render functional header if needed (e.g., "WITH GEN. prop.")
     if is_functional_header and inline_content:
         sense_html += f'<div class="case-governance-header"><strong>{inline_content}</strong></div>'
         return sense_html
@@ -164,8 +168,6 @@ def parse_sense_node(node, depth=0, num_override=None, is_functional_header=Fals
             sense_html += f'<span class="sense-body">{inline_content}</span>'
         sense_html += '</div>'
         
-    return sense_html
-            
     return sense_html
 
 def build_unabridged_dictionary():
@@ -296,14 +298,45 @@ def build_unabridged_dictionary():
                         first_unnumbered_idx = idx
                         break
 
+                # Helper function to detect functional headers
+                def is_func_header_candidate(sense_text):
+                    """Check if text looks like a functional/case-governance header."""
+                    text = clean_text_for_apple(sense_text or '').strip().lower()
+                    if len(text) < 8:  # Minimum meaningful length
+                        return False
+                    # Check for explicit case governance or relational keywords
+                    keywords = ['with gen', 'with acc', 'introducing', 'denoting', 'forming',
+                               'absol.', 'of place', 'in predicative', 'governing', 'c. gen',
+                               'c. acc']
+                    return any(text.startswith(kw.lower()) for kw in keywords)
+                
                 # Detect if entry has functional headers (WITH GEN., WITH ACC., introducing, etc.)
-                # These are senses with n="A", "B", "C" that contain descriptive text
                 has_functional_headers = any(
                     LOWER_LETTER_RE.match(clean_text_for_apple(s.attrib.get('n', '')).strip())
-                    and len(clean_text_for_apple(s.text or '')) > 10
+                    and is_func_header_candidate(s.text)
                     for s in all_senses
                 )
+
+                # Detect if entry has functional headers (WITH GEN., WITH ACC., introducing, etc.)
+                # These are senses with lowercase n-values that start with grammatical keywords
+                # Examples: "WITH GEN. prop.", "WITH ACC.", "introducing", "of time", etc.
+                def is_func_header_candidate(sense_text):
+                    """Check if text looks like a functional/case-governance header."""
+                    text = clean_text_for_apple(sense_text or '').strip().lower()
+                    if len(text) < 8:  # Minimum meaningful length
+                        return False
+                    # Check for explicit case governance or relational keywords
+                    keywords = ['with gen', 'with acc', 'introducing', 'denoting', 'forming',
+                               'absol.', 'of place', 'in predicative', 'governing', 'c. gen',
+                               'c. acc']
+                    return any(text.startswith(kw.lower()) for kw in keywords)
                 
+                has_functional_headers = any(
+                    LOWER_LETTER_RE.match(clean_text_for_apple(s.attrib.get('n', '')).strip())
+                    and is_func_header_candidate(s.text)
+                    for s in all_senses
+                )
+
                 # Build overview from Roman numeral senses (but skip if case-governed)
                 overview_items = []
                 if not has_functional_headers:
@@ -339,10 +372,10 @@ def build_unabridged_dictionary():
                     if idx == first_unnumbered_idx and not n_val:
                         n_val = 'I'
                     
-                    # Check if this is a functional header (A, B, C with descriptive text)
+                    # Check if this is a functional header (lowercase letter with grammatical text)
                     is_header = (
                         LOWER_LETTER_RE.match(n_val.strip()) and
-                        len(clean_text_for_apple(s.text or '')) > 10
+                        is_func_header_candidate(s.text)
                     )
                     
                     depth = sense_depth_from_n(n_val)
