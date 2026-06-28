@@ -1,4 +1,8 @@
-MIT License
+# Dual License
+
+This project contains code and data under different licenses:
+
+## Code (MIT License)
 
 Copyright (c) 2026 Jónatan Sólon
 
@@ -19,3 +23,36 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+**Applies to:** Python scripts (`scripts/`), CSS files (`src/GreekDictionary.css`), Makefile, and all other code.
+
+---
+
+## Data (Creative Commons Attribution-ShareAlike 4.0)
+
+The LSJ lexicon data (`data/lsj_unicode/`) and derived morphology databases are licensed under:
+
+**Creative Commons Attribution-ShareAlike 4.0 International**
+https://creativecommons.org/licenses/by-sa/4.0/
+
+**Attribution:** Chicago Digital Classics, Liddell–Scott–Jones Lexicon, via the Perseus Digital Library project.
+
+**You are free to:**
+- Share — copy and redistribute the material
+- Adapt — remix, transform, and build upon the material
+
+**Under the following terms:**
+- Attribution — give appropriate credit
+- ShareAlike — distribute your contributions under the same license
+
+See `data/lsj_unicode/LICENSE.md` for full details.
+
+---
+
+## Summary
+
+When distributing this dictionary:
+1. Include/reference both licenses
+2. Attribute the Chicago LSJ source
+3. Any derivative works using the LSJ data must also be CC BY-SA 4.0
+

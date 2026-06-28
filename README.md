@@ -120,7 +120,12 @@ To contribute:
 
 ## 📄 License
 
-This project is licensed under the [MIT License](LICENSE).
+This project uses a **dual-license model**:
+
+- **Code** (Python scripts, CSS, Makefile): [MIT License](LICENSE)
+- **Data** (LSJ lexicon, morphology): [Creative Commons Attribution-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0/) (per Chicago Digital Classics)
+
+See [LICENSE](LICENSE) for full details. When distributing this dictionary, both licenses apply.
 
 ## 🙏 Acknowledgments
 
