@@ -32,6 +32,19 @@ div.sense {
     line-height: 1.55em;
 }
 
+/* --- Case-Governance & Functional Headers --- */
+div.case-governance-header {
+    margin: 12px 0 8px 0;
+    padding: 6px 8px;
+    background: #f8f9fc;
+    border-left: 4px solid #8b9cc4;
+    font-weight: 600;
+    font-style: italic;
+    color: #3a3a5a;
+    font-size: 0.95em;
+    line-height: 1.4;
+}
+
 /* Major senses (I, II, III…) get a prominent subheading look */
 div.sense-major {
     margin-top: 10px;
