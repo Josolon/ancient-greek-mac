@@ -10,6 +10,18 @@ LSJ_DB_PATH = 'data/lsj.db'
 MORPH_DB_PATH = 'data/morph.db'
 OUTPUT_XML_PATH = 'src/GreekDictionary.xml'
 
+# Classical six principal parts shown first, in traditional order.
+# Anything not in this set (Imperfect, Pluperfect, Future Perfect, etc.) goes to secondary.
+PRINCIPAL_PARTS_ORDER = [
+    'Present Active', 'Present Middle', 'Present Passive',
+    'Future Active',  'Future Middle',
+    'Aorist Active',  'Aorist Middle',
+    'Perfect Active',
+    'Perfect Middle', 'Perfect Passive',
+    'Aorist Passive',
+]
+PRINCIPAL_PARTS_PRIMARY = frozenset(PRINCIPAL_PARTS_ORDER)
+
 def sanitize_apple_key(text):
     """Strips leading non-letters (like floating accents) so Apple DDK doesn't crash."""
     if not text: return ""
@@ -131,52 +143,57 @@ def build_dictionary():
                 clean_definition = html.escape(raw_def)
 
             # --- MAIN ENTRY CONTENT ---
-            xml.write(f'        <h1>{html.escape(raw_lemma)}</h1>\n')
+            xml.write(f'        <h1 class="entry-lemma">{html.escape(raw_lemma)}</h1>\n')
             xml.write(f'        <div class="definition">\n')
-            xml.write(f'            <p>{clean_definition}</p>\n') 
+            xml.write(f'            <p>{clean_definition}</p>\n')
             xml.write(f'        </div>\n')
 
             # --- DYNAMIC MORPHOLOGY PANE ---
             if is_noun_adj and noun_grid:
-                xml.write('        <details>\n')
-                xml.write('            <summary><b>Declension</b></summary>\n')
+                xml.write('        <div class="morph-section">\n')
+                xml.write('            <p class="morph-label">Declension</p>\n')
                 xml.write('            <table class="morphology-table">\n')
                 xml.write('                <tr><th>Case</th><th>Singular</th><th>Dual</th><th>Plural</th></tr>\n')
-                
-                cases = ['nominative', 'genitive', 'dative', 'accusative', 'vocative']
-                for c in cases:
+
+                for c in ['nominative', 'genitive', 'dative', 'accusative', 'vocative']:
                     if c in noun_grid:
-                        sing = "<br/>".join(noun_grid[c].get('singular', ['-']))
-                        dual = "<br/>".join(noun_grid[c].get('dual', ['-']))
-                        plur = "<br/>".join(noun_grid[c].get('plural', ['-']))
-                        xml.write(f'                <tr><td><b>{c.capitalize()}</b></td><td>{sing}</td><td>{dual}</td><td>{plur}</td></tr>\n')
-                
+                        sing = ", ".join(noun_grid[c].get('singular', ['\u2014']))
+                        dual = ", ".join(noun_grid[c].get('dual', ['\u2014']))
+                        plur = ", ".join(noun_grid[c].get('plural', ['\u2014']))
+                        xml.write(f'                <tr><td class="case-label">{c.capitalize()}</td><td>{sing}</td><td>{dual}</td><td>{plur}</td></tr>\n')
+
                 xml.write('            </table>\n')
-                xml.write('        </details>\n')
+                xml.write('        </div>\n')
 
             elif is_verb and verb_principal_parts:
-                xml.write('        <details>\n')
-                xml.write('            <summary><b>Principal Parts</b></summary>\n')
+                primary_parts = {k: v for k, v in verb_principal_parts.items() if k in PRINCIPAL_PARTS_PRIMARY}
+                secondary_parts = {k: v for k, v in verb_principal_parts.items() if k not in PRINCIPAL_PARTS_PRIMARY}
+                xml.write('        <div class="morph-section">\n')
+                xml.write('            <p class="morph-label">Principal Parts</p>\n')
                 xml.write('            <table class="morphology-table">\n')
-                xml.write('                <tr><th>Tense / Voice</th><th>Form (1st Sg. Ind.)</th></tr>\n')
-                
-                for label, forms in sorted(verb_principal_parts.items()):
-                    form_display = "<br/>".join(forms)
-                    xml.write(f'                <tr><td><b>{label}</b></td><td>{form_display}</td></tr>\n')
-                
+                xml.write('                <tr><th>Tense &amp; Voice</th><th>Form (1. sg. ind.)</th></tr>\n')
+
+                for label in PRINCIPAL_PARTS_ORDER:
+                    if label in primary_parts:
+                        xml.write(f'                <tr><td class="case-label">{label}</td><td>{", ".join(primary_parts[label])}</td></tr>\n')
+                if secondary_parts:
+                    xml.write('                <tr class="morph-secondary-header"><td colspan="2">Additional attested forms</td></tr>\n')
+                    for label, forms in sorted(secondary_parts.items()):
+                        xml.write(f'                <tr><td class="case-label">{label}</td><td>{", ".join(forms)}</td></tr>\n')
+
                 xml.write('            </table>\n')
-                xml.write('        </details>\n')
-                
+                xml.write('        </div>\n')
+
             elif generic_forms:
                 # Fallback for adverbs/particles
-                xml.write('        <details>\n')
-                xml.write('            <summary><b>Forms</b></summary>\n')
+                xml.write('        <div class="morph-section">\n')
+                xml.write('            <p class="morph-label">Forms</p>\n')
                 xml.write('            <table class="morphology-table">\n')
                 for m_form, m_parsings in generic_forms.items():
-                    parsing_display = "<br/>".join(html.escape(p) for p in m_parsings)
-                    xml.write(f'                <tr><td><b>{m_form}</b></td><td>{parsing_display}</td></tr>\n')
+                    parsing_display = ", ".join(html.escape(p) for p in m_parsings)
+                    xml.write(f'                <tr><td class="case-label">{m_form}</td><td>{parsing_display}</td></tr>\n')
                 xml.write('            </table>\n')
-                xml.write('        </details>\n')
+                xml.write('        </div>\n')
 
             xml.write('    </d:entry>\n\n')
             

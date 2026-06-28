@@ -1,37 +1,170 @@
-/* Dictionary.css */
+/* GreekDictionary.css */
+
 body {
-    font-family: -apple-system, "Helvetica Neue", sans-serif;
+    font-family: -apple-system, "Helvetica Neue", "Lucida Grande", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #1a1a1a;
 }
 
-h1 {
-    color: #333;
-    font-size: 1.5em;
-    margin-bottom: 4px;
+/* --- Entry Heading --- */
+h1.entry-lemma {
+    font-family: "New Athena Unicode", "Noto Serif", Georgia, serif;
+    font-size: 1.6em;
+    font-weight: bold;
+    color: #1a1a4e;
+    margin: 0 0 6px 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #c0c8e0;
+    letter-spacing: 0.02em;
 }
 
-details {
+/* --- Definition Block --- */
+div.definition {
+    margin: 6px 0 12px 0;
+    padding-left: 4px;
+}
+
+/* --- Sense Blocks --- */
+div.sense {
+    margin-top: 3px;
+    margin-bottom: 3px;
+    line-height: 1.55em;
+}
+
+/* Major senses (I, II, III…) get a prominent subheading look */
+div.sense-major {
     margin-top: 10px;
-    background-color: #f9f9f9;
-    padding: 8px;
-    border-radius: 6px;
-    border: 1px solid #ddd;
+    margin-bottom: 2px;
+    padding-top: 5px;
+    border-top: 1px solid #d0d8ee;
 }
 
-summary {
-    cursor: pointer;
+div.sense-major .sense-num {
+    font-size: 1.05em;
+    font-weight: bold;
+    color: #6b0000;
+}
+
+div.sense-depth-0 {
+    margin-top: 5px;
+}
+
+div.sense-depth-1 {
+    border-left: 2px solid #c8d4f0;
+    padding-left: 7px;
+    margin-top: 4px;
+}
+
+div.sense-depth-2 {
+    border-left: 2px solid #d8e4f8;
+    padding-left: 7px;
+    margin-top: 3px;
+}
+
+div.sense-depth-3,
+div.sense-depth-4 {
+    border-left: 1px solid #e8eef8;
+    padding-left: 6px;
+    margin-top: 2px;
+}
+
+/* Sense numbering marker */
+span.sense-num {
+    font-weight: bold;
+    color: #8b1111;
+    font-size: 0.98em;
+    margin-right: 2px;
+}
+
+/* Inline sense content */
+span.sense-body {
+    color: #1a1a1a;
+}
+
+/* Greek / foreign text inline */
+b.gk-word {
+    color: #002266;
+    font-size: 1.04em;
+    font-family: "New Athena Unicode", "Noto Serif", Georgia, serif;
+}
+
+/* Bibliographic citations */
+span.citation {
+    color: #666;
     font-size: 0.9em;
-    color: #007aff; /* Apple Blue */
 }
 
+/* --- Morphology Section --- */
+div.morph-section {
+    margin-top: 14px;
+    background-color: #f7f9ff;
+    border: 1px solid #c8d4ee;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+p.morph-label {
+    margin: 0;
+    padding: 5px 10px;
+    font-size: 0.86em;
+    font-weight: 600;
+    color: #2a4a9a;
+    background-color: #edf1fb;
+    border-bottom: 1px solid #c8d4ee;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+/* Secondary (rare) principal parts get a lighter divider row */
+.morph-secondary-header td {
+    font-size: 0.82em;
+    font-style: italic;
+    color: #666;
+    padding: 3px 8px;
+    background-color: #f0f4fc;
+    border-top: 1px solid #dde6f8;
+    border-bottom: 1px dashed #dde6f8;
+}
+
+/* --- Morphology Table --- */
 .morphology-table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 8px;
-    font-size: 0.85em;
+    font-size: 0.84em;
+    margin: 0;
 }
 
-.morphology-table th, .morphology-table td {
-    border: 1px solid #ccc;
-    padding: 4px;
+.morphology-table th {
+    background-color: #e8edf8;
+    color: #2a3a6a;
+    font-weight: 600;
+    padding: 5px 8px;
     text-align: left;
+    border-bottom: 1px solid #c8d4ee;
+}
+
+.morphology-table td {
+    padding: 4px 8px;
+    vertical-align: top;
+    border-bottom: 1px solid #eef0f8;
+    color: #1a1a1a;
+    font-family: "New Athena Unicode", "Noto Serif", Georgia, serif;
+}
+
+.morphology-table td.case-label {
+    font-family: -apple-system, "Helvetica Neue", sans-serif;
+    font-weight: 600;
+    color: #2a4a8a;
+    font-size: 0.95em;
+    white-space: nowrap;
+    width: 90px;
+}
+
+.morphology-table tr:last-child td {
+    border-bottom: none;
+}
+
+.morphology-table tr:nth-child(even) td {
+    background-color: #f7f9ff;
 }

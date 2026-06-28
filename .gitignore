@@ -239,7 +239,7 @@ data/morph.db
 data/texts.db
 
 # Ignore the massive Perseus XML repository
-data/lexica/
+data/lsj_unicode/
 
 # Ignore the 200MB generated dictionary source XML
 src/GreekDictionary.xml
