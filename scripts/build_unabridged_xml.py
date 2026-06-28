@@ -52,6 +52,13 @@ def normalize_grave_to_acute(text):
     normalized = decomposed.replace('\u0300', '\u0301')  # grave → acute
     return unicodedata.normalize('NFC', normalized)
 
+def normalize_acute_to_grave(text):
+    """Converts acute accents to grave; indexes both variants for robust lookup."""
+    if not text: return ""
+    decomposed = unicodedata.normalize('NFD', text)
+    normalized = decomposed.replace('\u0301', '\u0300')  # acute → grave
+    return unicodedata.normalize('NFC', normalized)
+
 def strip_all_greek_accents(text):
     """Strips every combining diacritic for fully accent-insensitive fallback lookup."""
     if not text: return ""
@@ -221,9 +228,10 @@ def build_unabridged_dictionary():
                 out_xml.write(f'    <d:entry id="{entry_id}" d:title="{html.escape(safe_title)}">\n')
                 
                 search_indices = {raw_lemma, lookup_lemma}
-                # Also index grave→acute and fully unaccented forms so macOS
+                # Also index grave→acute, acute→grave, and fully unaccented forms so macOS
                 # Look Up works regardless of accent variant in running text.
                 search_indices.add(normalize_grave_to_acute(raw_lemma))
+                search_indices.add(normalize_acute_to_grave(raw_lemma))
                 search_indices.add(strip_all_greek_accents(raw_lemma))
                 morph_cursor.execute("SELECT form, form_normalized, pos, tense, voice, mood, person, number, case_name FROM morphology WHERE lemma = ?", (lookup_lemma,))
                 morph_rows = morph_cursor.fetchall()
@@ -239,12 +247,14 @@ def build_unabridged_dictionary():
                         search_indices.add(f_clean)
                         search_indices.add(strip_greek_vowel_lengths(f_clean))
                         search_indices.add(normalize_grave_to_acute(f_clean))
+                        search_indices.add(normalize_acute_to_grave(f_clean))
                         search_indices.add(strip_all_greek_accents(f_clean))
                     if f_norm:
                         n_clean = clean_text_for_apple(f_norm)
                         search_indices.add(n_clean)
                         search_indices.add(strip_greek_vowel_lengths(n_clean))
                         search_indices.add(normalize_grave_to_acute(n_clean))
+                        search_indices.add(normalize_acute_to_grave(n_clean))
                         search_indices.add(strip_all_greek_accents(n_clean))
                     
                     disp_form = html.escape(clean_text_for_apple(f_form))
