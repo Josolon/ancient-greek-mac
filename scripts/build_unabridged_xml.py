@@ -86,18 +86,19 @@ def sense_depth_from_n(n_val):
         return 2   # a, b, c … — sub-sub-sense
     return 3       # anything deeper
 
-def brief_sense_text(node, max_chars=65):
-    """Extract a short plain-text snippet from a sense node for the overview.
+def brief_sense_text(node, max_chars=200):
+    """Extract a meaningful snippet from a sense node for the overview.
     
-    Focuses on the initial definition, stopping before examples/citations.
+    Includes sufficient context without becoming too verbose.
     """
-    # Extract only the main definition text, not children/examples
+    # Extract text content, stopping at citations but preserving definition
     text = node.text if node.text else ""
     text = clean_text_for_apple(text.strip())
     
-    # Stop at common punctuation that separates definitions from examples
-    # (semicolon, comma at end of phrase, cf., etc.)
-    text = re.sub(r'\s*[,;]\s*.*$', '', text, flags=re.DOTALL)
+    # Include more context but still stop before citations
+    # Stop at: 'cf.', 'v.', '(with', 'also', 'but', when followed by heavy punctuation
+    text = re.sub(r'\s+\(cf\..*$', '', text, flags=re.DOTALL)
+    text = re.sub(r'\s+v\.\s+.*$', '', text, flags=re.DOTALL)
     text = re.sub(r'\s*(cf\.|v\.|etc\.)\s*.*$', '', text, flags=re.IGNORECASE | re.DOTALL)
     
     text = re.sub(r'\s+', ' ', text).strip()
@@ -298,7 +299,7 @@ def build_unabridged_dictionary():
                         first_unnumbered_idx = idx
                         break
 
-                # Helper function to detect functional headers
+                # Helper function to detect functional headers (capital letters with keywords)
                 def is_func_header_candidate(sense_text):
                     """Check if text looks like a functional/case-governance header."""
                     text = clean_text_for_apple(sense_text or '').strip().lower()
@@ -310,60 +311,32 @@ def build_unabridged_dictionary():
                                'c. acc']
                     return any(text.startswith(kw.lower()) for kw in keywords)
                 
-                # Detect if entry has functional headers (WITH GEN., WITH ACC., introducing, etc.)
-                has_functional_headers = any(
-                    LOWER_LETTER_RE.match(clean_text_for_apple(s.attrib.get('n', '')).strip())
-                    and is_func_header_candidate(s.text)
-                    for s in all_senses
-                )
-
-                # Detect if entry has functional headers (WITH GEN., WITH ACC., introducing, etc.)
-                # These are senses with lowercase n-values that start with grammatical keywords
-                # Examples: "WITH GEN. prop.", "WITH ACC.", "introducing", "of time", etc.
-                def is_func_header_candidate(sense_text):
-                    """Check if text looks like a functional/case-governance header."""
-                    text = clean_text_for_apple(sense_text or '').strip().lower()
-                    if len(text) < 8:  # Minimum meaningful length
-                        return False
-                    # Check for explicit case governance or relational keywords
-                    keywords = ['with gen', 'with acc', 'introducing', 'denoting', 'forming',
-                               'absol.', 'of place', 'in predicative', 'governing', 'c. gen',
-                               'c. acc']
-                    return any(text.startswith(kw.lower()) for kw in keywords)
-                
-                has_functional_headers = any(
-                    LOWER_LETTER_RE.match(clean_text_for_apple(s.attrib.get('n', '')).strip())
-                    and is_func_header_candidate(s.text)
-                    for s in all_senses
-                )
-
-                # Build overview from Roman numeral senses (but skip if case-governed)
+                # Build overview from Roman numeral senses (always, regardless of functional headers)
                 overview_items = []
-                if not has_functional_headers:
-                    seen_roman_numerals = set()
-                    all_roman_numerals = []
-                    
-                    for idx, s in enumerate(all_senses):
-                        num = clean_text_for_apple(s.attrib.get('n', ''))
-                        # Include first unnumbered sense as "I" in overview
-                        if idx == first_unnumbered_idx and not num:
-                            num = 'I'
-                        if num and ROMAN_NUM_RE.match(num.strip()):
-                            all_roman_numerals.append(num)
-                            # Only add the FIRST occurrence of each Roman numeral
-                            if num not in seen_roman_numerals:
-                                brief = brief_sense_text(s)
-                                if brief:
-                                    overview_items.append((num, brief))
-                                    seen_roman_numerals.add(num)
-                    
-                    # Only show if we have good unique numerals (not many duplicates from case structure)
-                    has_many_duplicates = len(all_roman_numerals) > len(overview_items) * 1.5
-                    if len(overview_items) > 1 and not has_many_duplicates:
-                        out_xml.write('        <div class="sense-overview">\n')
-                        for ov_num, ov_brief in overview_items:
-                            out_xml.write(f'          <span class="overview-item"><span class="sense-num">{html.escape(ov_num)}</span> {html.escape(ov_brief)}</span>\n')
-                        out_xml.write('        </div>\n')
+                seen_roman_numerals = set()
+                all_roman_numerals = []
+                
+                for idx, s in enumerate(all_senses):
+                    num = clean_text_for_apple(s.attrib.get('n', ''))
+                    # Include first unnumbered sense as "I" in overview
+                    if idx == first_unnumbered_idx and not num:
+                        num = 'I'
+                    if num and ROMAN_NUM_RE.match(num.strip()):
+                        all_roman_numerals.append(num)
+                        # Only add the FIRST occurrence of each Roman numeral
+                        if num not in seen_roman_numerals:
+                            brief = brief_sense_text(s)
+                            if brief:
+                                overview_items.append((num, brief))
+                                seen_roman_numerals.add(num)
+                
+                # Only show overview if we have good unique numerals (not many duplicates)
+                has_many_duplicates = len(all_roman_numerals) > len(overview_items) * 1.5
+                if len(overview_items) > 1 and not has_many_duplicates:
+                    out_xml.write('        <div class="sense-overview">\n')
+                    for ov_num, ov_brief in overview_items:
+                        out_xml.write(f'          <span class="overview-item"><span class="sense-num">{html.escape(ov_num)}</span> {html.escape(ov_brief)}</span>\n')
+                    out_xml.write('        </div>\n')
 
                 definitions_html = ""
                 for idx, s in enumerate(all_senses):
@@ -372,7 +345,8 @@ def build_unabridged_dictionary():
                     if idx == first_unnumbered_idx and not n_val:
                         n_val = 'I'
                     
-                    # Check if this is a functional header (lowercase letter with grammatical text)
+                    # Check if this is a functional header (capital letter with grammatical text)
+                    # Capital letters A, B, C indicate case-governance or functional groupings
                     is_header = (
                         LOWER_LETTER_RE.match(n_val.strip()) and
                         is_func_header_candidate(s.text)
