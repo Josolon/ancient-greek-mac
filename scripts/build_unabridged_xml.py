@@ -291,17 +291,30 @@ def build_unabridged_dictionary():
 
                 # Build overview from Roman numeral senses
                 overview_items = []
+                seen_roman_numerals = set()  # Track which numerals we've already added
+                all_roman_numerals = []  # Track ALL Roman numerals (including duplicates) to detect case-governed structure
+                
                 for idx, s in enumerate(all_senses):
                     num = clean_text_for_apple(s.attrib.get('n', ''))
                     # Include first unnumbered sense as "I" in overview
                     if idx == first_unnumbered_idx and not num:
                         num = 'I'
                     if num and ROMAN_NUM_RE.match(num.strip()):
-                        brief = brief_sense_text(s)
-                        if brief:
-                            overview_items.append((num, brief))
+                        all_roman_numerals.append(num)
+                        # Only add the FIRST occurrence of each Roman numeral
+                        # (avoids duplicates from case-governance repetition like WITH GEN./WITH ACC.)
+                        if num not in seen_roman_numerals:
+                            brief = brief_sense_text(s)
+                            if brief:
+                                overview_items.append((num, brief))
+                                seen_roman_numerals.add(num)
 
-                if len(overview_items) > 1:
+                # Only show overview if senses are not case-governed
+                # Case-governed entries (WITH GEN., WITH ACC., etc.) have repeated Roman numerals
+                # Showing them creates confusing duplicate summaries
+                has_duplicates = len(all_roman_numerals) != len(overview_items)
+                
+                if len(overview_items) > 1 and not has_duplicates:
                     out_xml.write('        <div class="sense-overview">\n')
                     for ov_num, ov_brief in overview_items:
                         out_xml.write(f'          <span class="overview-item"><span class="sense-num">{html.escape(ov_num)}</span> {html.escape(ov_brief)}</span>\n')
