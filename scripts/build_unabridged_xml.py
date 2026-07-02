@@ -69,45 +69,115 @@ def strip_all_greek_accents(text):
     filtered = "".join(ch for ch in decomposed if ord(ch) not in STRIP)
     return unicodedata.normalize('NFC', filtered)
 
+CAPITAL_LETTER_RE = re.compile(r'^[A-Z]\.?$')
 ROMAN_NUM_RE = re.compile(r'^[IVXivx]+\.?$')
 ARABIC_NUM_RE = re.compile(r'^\d+\.?$')
 LOWER_LETTER_RE = re.compile(r'^[a-z]\.?$')
 
 def sense_depth_from_n(n_val):
-    """Infer visual indentation depth from the TEI sense n-attribute."""
-    if not n_val:
-        return 0   # No n-attribute — treat as top-level (often definition intro)
-    n = n_val.strip().rstrip('.')
-    if ROMAN_NUM_RE.match(n):
-        return 0   # I, II, III … — top-level
-    if ARABIC_NUM_RE.match(n_val.strip()):
-        return 1   # 1, 2, 3 … — sub-sense
-    if LOWER_LETTER_RE.match(n_val.strip()):
-        return 2   # a, b, c … — sub-sub-sense
-    return 3       # anything deeper
-
-def brief_sense_text(node, max_chars=200):
-    """Extract a meaningful snippet from a sense node for the overview.
+    """Infer visual indentation depth from the TEI sense n-attribute.
     
-    Includes sufficient context without becoming too verbose.
+    Hierarchy:
+    - Bullet (•) = special marker, rendered as intro text (no depth)
+    - Roman numerals (I, II, III) = depth 1 (major senses) — MUST check BEFORE capitals!
+    - Capital letters (A, B, C) = depth 0 (top-level, case-governance headers)
+    - Arabic numerals (1, 2, 3) = depth 2 (sub-senses)
+    - Lowercase letters (a, b, c) = depth 3 (sub-sub-senses)
     """
-    # Extract text content, stopping at citations but preserving definition
-    text = node.text if node.text else ""
-    text = clean_text_for_apple(text.strip())
+    if not n_val:
+        return 1   # No n-attribute — treat as major sense (like Roman numerals)
+    n = n_val.strip().rstrip('.')
+    if n == '•':
+        return -1  # Bullet — special marker, not a sense level
+    if ROMAN_NUM_RE.match(n):
+        return 1   # I, II, III … — major sense (CHECK BEFORE capitals!)
+    if CAPITAL_LETTER_RE.match(n):
+        return 0   # A, B, C … — top-level (after Roman check)
+    if ARABIC_NUM_RE.match(n):
+        return 2   # 1, 2, 3 … — sub-sense
+    if LOWER_LETTER_RE.match(n):
+        return 3   # a, b, c … — sub-sub-sense
+    return 4       # anything deeper
+
+def _clean_and_truncate_brief(text, max_chars=200, for_overview=False):
+    """Shared cleanup/truncation logic for brief summaries: strips citations and
+    cross-references, then truncates to a sensible length. Used both for
+    per-sense summaries and for synthetic-heading preamble summaries.
     
-    # Include more context but still stop before citations
-    # Stop at: 'cf.', 'v.', '(with', 'also', 'but', when followed by heavy punctuation
-    text = re.sub(r'\s+\(cf\..*$', '', text, flags=re.DOTALL)
-    text = re.sub(r'\s+v\.\s+.*$', '', text, flags=re.DOTALL)
-    text = re.sub(r'\s*(cf\.|v\.|etc\.)\s*.*$', '', text, flags=re.IGNORECASE | re.DOTALL)
+    Args:
+        text: Raw, already-flattened text to clean up
+        max_chars: Maximum characters (200 for full, 150 for overview)
+        for_overview: If True, use a shorter limit and stop at the first sentence
+    """
+    # Remove citations and cross-references more aggressively
+    text = re.sub(r'\s+\(cf\..*?\)', '', text, flags=re.DOTALL)  # (cf. ...)
+    text = re.sub(r'\s+\([A-Z][a-z]+\..*?\)', '', text, flags=re.DOTALL)  # (Pl. ...), (Hdt. ...), etc
+    text = re.sub(r'\s+v\.\s+.*$', '', text, flags=re.DOTALL)  # v. ref
+    text = re.sub(r'\s*(cf\.|etc\.)\s*.*$', '', text, flags=re.IGNORECASE | re.DOTALL)  # cf., etc.
+    text = re.sub(r'\s+;.*$', '', text)  # Remove everything after semicolon
     
     text = re.sub(r'\s+', ' ', text).strip()
     
-    # Truncate to max length
+    # For overview, use a longer-but-still-brief limit and stop at the first
+    # full sentence (period) rather than the first comma, so the reader gets
+    # at least "the first line" of meaningful context rather than one word.
+    if for_overview:
+        max_chars = min(150, max_chars)
+        match = re.search(r'\.', text)
+        if match and match.start() > 5:  # Only if meaningful content before
+            text = text[:match.start()].strip()
+    
     if len(text) > max_chars:
         text = text[:max_chars].rstrip() + '\u2026'
     
     return text
+
+def brief_sense_text(node, max_chars=200, for_overview=False):
+    """Extract a meaningful snippet from a sense node for the overview.
+    
+    Includes text from inline children (bold, italic, citations) but not
+    from nested sense sub-nodes.
+    
+    Args:
+        node: The sense element
+        max_chars: Maximum characters (200 for full, 150 for overview)
+        for_overview: If True, use shorter limit and stop at first sentence
+    """
+    # Collect text from direct node content + inline children, skipping nested senses
+    parts = []
+    if node.text:
+        parts.append(node.text)
+    for child in node:
+        if child.tag.split('}')[-1] != 'sense':  # Skip nested senses
+            parts.append("".join(child.itertext()))
+            if child.tail:
+                parts.append(child.tail)
+    text = clean_text_for_apple("".join(parts).strip())
+    return _clean_and_truncate_brief(text, max_chars=max_chars, for_overview=for_overview)
+
+def extract_preamble_text(entry, head_node, max_chars=200, for_overview=False):
+    """Extract the free-form content TEI leaves directly under the entry before
+    its first <sense> child - typically the principal-parts/tense-form preamble
+    that precedes the first definition (e.g. a verb's "impf. ἔλειπον ...: fut.
+    λείψω ...:"). Used to give a synthetic top-level heading (e.g. "A") real
+    content when no wrapping <sense> exists for it in the TEI source at all.
+    """
+    children = list(entry)
+    if head_node not in children:
+        return ""
+    parts = []
+    if head_node.tail:
+        parts.append(head_node.tail)
+    for child in children[children.index(head_node) + 1:]:
+        if child.tag.split('}')[-1] == 'sense':
+            break  # Stop at the first real sense
+        parts.append("".join(child.itertext()))
+        if child.tail:
+            parts.append(child.tail)
+    text = clean_text_for_apple("".join(parts).strip())
+    # Drop the leftover leading punctuation from the head's trailing comma/colon
+    text = re.sub(r'^[\s,;:.\u2014-]+', '', text)
+    return _clean_and_truncate_brief(text, max_chars=max_chars, for_overview=for_overview)
 
 def parse_sense_node(node, depth=0, num_override=None, is_functional_header=False):
     """
@@ -152,12 +222,8 @@ def parse_sense_node(node, depth=0, num_override=None, is_functional_header=Fals
     inline_content = " ".join(fragments)
     inline_content = re.sub(r'\s+', ' ', inline_content).strip()
     
-    # Render functional header if needed (e.g., "WITH GEN. prop.")
-    if is_functional_header and inline_content:
-        sense_html += f'<div class="case-governance-header"><strong>{inline_content}</strong></div>'
-        return sense_html
-    
-    is_major = bool(depth == 0 and num_marker and ROMAN_NUM_RE.match(num_marker.strip()))
+    # Mark Roman numerals (depth 1) as major sense sections
+    is_major = bool(depth == 1 and num_marker and ROMAN_NUM_RE.match(num_marker.strip()))
     
     if num_marker or inline_content:
         depth_class = f'sense-depth-{min(depth, 4)}'
@@ -291,14 +357,6 @@ def build_unabridged_dictionary():
                 
                 all_senses = [c for c in entry.iter() if c.tag.split('}')[-1] == 'sense']
 
-                # Find first unnumbered sense if any (for auto-labeling as "I")
-                first_unnumbered_idx = None
-                for idx, s in enumerate(all_senses):
-                    n = clean_text_for_apple(s.attrib.get('n', ''))
-                    if not n:
-                        first_unnumbered_idx = idx
-                        break
-
                 # Helper function to detect functional headers (capital letters with keywords)
                 def is_func_header_candidate(sense_text):
                     """Check if text looks like a functional/case-governance header."""
@@ -306,54 +364,150 @@ def build_unabridged_dictionary():
                     if len(text) < 8:  # Minimum meaningful length
                         return False
                     # Check for explicit case governance or relational keywords
-                    keywords = ['with gen', 'with acc', 'introducing', 'denoting', 'forming',
-                               'absol.', 'of place', 'in predicative', 'governing', 'c. gen',
-                               'c. acc']
+                    keywords = ['with gen', 'with dat', 'with acc', 'with abl',
+                               'introducing', 'denoting', 'forming',
+                               'absol.', 'of place', 'in predicative', 'in compos',
+                               'governing', 'c. gen', 'c. acc', 'c. dat']
                     return any(text.startswith(kw.lower()) for kw in keywords)
                 
-                # Build overview from Roman numeral senses (always, regardless of functional headers)
+                # Build overview: 
+                # - If entry has capitals: show ONLY capitals
+                # - If entry has NO capitals: show ONLY Romans
                 overview_items = []
-                seen_roman_numerals = set()
-                all_roman_numerals = []
+
+                def clean_n(sense_node):
+                    return clean_text_for_apple(sense_node.attrib.get('n', '')).strip()
+
+                non_bullet_senses = [s for s in all_senses if clean_n(s) != '•']
+
+                # First check: do we have any capitals?
+                # IMPORTANT: Check ROMAN_NUM_RE before CAPITAL_LETTER_RE to avoid matching I, V, X
+                has_capitals = any(
+                    CAPITAL_LETTER_RE.match(clean_n(s))
+                    for s in non_bullet_senses
+                    if clean_n(s) and not ROMAN_NUM_RE.match(clean_n(s))
+                )
+                has_romans = any(ROMAN_NUM_RE.match(clean_n(s)) for s in non_bullet_senses if clean_n(s))
+                has_explicit_A = any(clean_n(s).rstrip('.') == 'A' for s in non_bullet_senses)
+                has_explicit_I = any(clean_n(s).rstrip('.') == 'I' for s in non_bullet_senses)
+
+                # The Chicago TEI source frequently leaves the very first top-level
+                # division either blank (n="") or entirely unwrapped (no <sense> at
+                # all before it). Printed LSJ always labels that leading division as
+                # the first letter/numeral of whichever scheme the entry uses ("A"
+                # for capital-lettered entries, "I" for Roman-numbered ones). Without
+                # this reconstruction, that first heading (and its summary) silently
+                # disappears from both the overview box and the main content.
+                #
+                # Two distinct situations occur in the source:
+                #  - A placeholder <sense n=""> exists holding the real definition
+                #    text (e.g. ἀγαθός: "good:", πηρός: "disabled in a limb..."). By
+                #    print convention this leading division is ALWAYS "A" - the top
+                #    of the LSJ hierarchy - no matter what scheme (Roman, Arabic, or
+                #    nothing) is used further down inside the entry.
+                #  - No placeholder sense exists at all (e.g. λείπω, where content
+                #    jumps straight to arabic sub-senses). Only then do we fall back
+                #    to inspecting the entry's actual capital/Roman scheme to decide
+                #    whether a bare "A"/"I" heading needs to be injected.
+                first_non_bullet = next((s for s in all_senses if clean_n(s) != '•'), None)
+                first_is_placeholder = first_non_bullet is not None and clean_n(first_non_bullet) == ''
+
+                synthetic_label = None
+                if first_is_placeholder:
+                    if not has_explicit_A:
+                        synthetic_label = 'A'
+                elif has_capitals and not has_explicit_A:
+                    synthetic_label = 'A'
+                elif not has_capitals and has_romans and not has_explicit_I:
+                    synthetic_label = 'I'
+
+                # Resolve the render order + label for every sense. If a leading
+                # empty-n placeholder sense exists, absorb the synthetic label into
+                # it (its body text is preserved). If no placeholder sense exists at
+                # all, inject a bare heading immediately before the first real sense.
+                render_items = []  # (sense_or_None, label_or_None, is_synthetic)
+                synthetic_applied = (synthetic_label is None)
+                for s in all_senses:
+                    n_val = clean_n(s)
+                    if n_val == '•':
+                        render_items.append((s, None, False))
+                        continue
+                    if not synthetic_applied:
+                        if n_val == '':
+                            render_items.append((s, synthetic_label, False))
+                            synthetic_applied = True
+                            continue
+                        else:
+                            render_items.append((None, synthetic_label, True))
+                            render_items.append((s, n_val, False))
+                            synthetic_applied = True
+                            continue
+                    render_items.append((s, n_val, False))
+
+                # Entry-level preamble (pronunciation, dialect variants, gender
+                # endings) sits directly under the entry before its first <sense>
+                # and is otherwise silently dropped. Show it once, either as its
+                # own intro line, or - if it was already absorbed into a Type-2
+                # synthetic heading below (no placeholder sense existed) - skip it
+                # here to avoid printing the same text twice.
+                leading_is_synthetic_injection = bool(render_items) and render_items[0][2] is True
+                if not leading_is_synthetic_injection:
+                    entry_preamble = extract_preamble_text(entry, head_node, max_chars=300, for_overview=False)
+                    if entry_preamble:
+                        out_xml.write(f'        <div class="entry-preamble">{html.escape(entry_preamble)}</div>\n')
+
+                if has_capitals:
+                    # Collect ONLY capitals for overview
+                    # IMPORTANT: Check ROMAN_NUM_RE before CAPITAL_LETTER_RE to prevent I/V/X confusion
+                    for s, label, is_synth in render_items:
+                        if not label or label == '•':
+                            continue
+                        # Skip Romans - they might match capital letter pattern (I, V, X)
+                        if ROMAN_NUM_RE.match(label):
+                            continue
+                        if CAPITAL_LETTER_RE.match(label):
+                            brief = extract_preamble_text(entry, head_node, for_overview=True) if is_synth else brief_sense_text(s, for_overview=True)
+                            if brief or is_synth:
+                                overview_items.append((label, brief))
+                else:
+                    # No capitals - collect ONLY Romans for overview
+                    for s, label, is_synth in render_items:
+                        if not label or label == '•':
+                            continue
+                        if ROMAN_NUM_RE.match(label):
+                            brief = extract_preamble_text(entry, head_node, for_overview=True) if is_synth else brief_sense_text(s, for_overview=True)
+                            # Always add Roman numerals to overview, even without text
+                            overview_items.append((label, brief if brief else ""))
                 
-                for idx, s in enumerate(all_senses):
-                    num = clean_text_for_apple(s.attrib.get('n', ''))
-                    # Include first unnumbered sense as "I" in overview
-                    if idx == first_unnumbered_idx and not num:
-                        num = 'I'
-                    if num and ROMAN_NUM_RE.match(num.strip()):
-                        all_roman_numerals.append(num)
-                        # Only add the FIRST occurrence of each Roman numeral
-                        if num not in seen_roman_numerals:
-                            brief = brief_sense_text(s)
-                            if brief:
-                                overview_items.append((num, brief))
-                                seen_roman_numerals.add(num)
-                
-                # Only show overview if we have good unique numerals (not many duplicates)
-                has_many_duplicates = len(all_roman_numerals) > len(overview_items) * 1.5
-                if len(overview_items) > 1 and not has_many_duplicates:
+                # Show overview if we have good content (at least 1 item)
+                if len(overview_items) >= 1:
                     out_xml.write('        <div class="sense-overview">\n')
                     for ov_num, ov_brief in overview_items:
                         out_xml.write(f'          <span class="overview-item"><span class="sense-num">{html.escape(ov_num)}</span> {html.escape(ov_brief)}</span>\n')
                     out_xml.write('        </div>\n')
 
                 definitions_html = ""
-                for idx, s in enumerate(all_senses):
-                    n_val = clean_text_for_apple(s.attrib.get('n', ''))
-                    # Auto-label the first unnumbered sense as "I" for clarity
-                    if idx == first_unnumbered_idx and not n_val:
-                        n_val = 'I'
+                for s, label, is_synth in render_items:
+                    if is_synth:
+                        # Inject a heading for an implicit leading division that has
+                        # no wrapping <sense> element at all in the source (e.g. a
+                        # preamble of principal parts precedes the first arabic
+                        # sense). Fill it with that preamble text so the heading
+                        # isn't left bare - it still describes what falls under it.
+                        depth = sense_depth_from_n(label)
+                        major_class = ' sense-major' if depth == 1 else ''
+                        preamble_text = extract_preamble_text(entry, head_node, max_chars=200, for_overview=False)
+                        body_html = f' <span class="sense-body">{html.escape(preamble_text)}</span>' if preamble_text else ''
+                        definitions_html += f'<div class="sense sense-depth-{min(depth, 4)}{major_class}"><span class="sense-num">{html.escape(label)}</span>{body_html}</div>'
+                        continue
+                    if label is None:
+                        continue  # bullet marker (•) - skip entirely
                     
-                    # Check if this is a functional header (capital letter with grammatical text)
-                    # Capital letters A, B, C indicate case-governance or functional groupings
-                    is_header = (
-                        LOWER_LETTER_RE.match(n_val.strip()) and
-                        is_func_header_candidate(s.text)
-                    )
+                    # Determine sense depth from the resolved label
+                    depth = sense_depth_from_n(label)
                     
-                    depth = sense_depth_from_n(n_val)
-                    definitions_html += parse_sense_node(s, depth=depth, num_override=n_val, is_functional_header=is_header)
+                    # Render as regular sense
+                    definitions_html += parse_sense_node(s, depth=depth, num_override=label, is_functional_header=False)
                 
                 if not definitions_html:
                     fallback_text = "".join(entry.itertext()).strip()

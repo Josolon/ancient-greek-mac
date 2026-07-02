@@ -131,6 +131,14 @@ span.overview-item {
     margin-right: 10px;
 }
 
+/* --- Entry Preamble (pronunciation, dialect variants, gender endings) --- */
+div.entry-preamble {
+    margin: 2px 0 8px 0;
+    color: #444;
+    font-style: italic;
+    font-size: 0.95em;
+}
+
 /* --- Morphology Section --- */
 div.morph-section {
     margin-top: 14px;

@@ -5,7 +5,7 @@
 
 A custom `.dictionary` plugin for the native macOS Dictionary app and system-wide "Look Up" feature. This dictionary combines the **complete Liddell–Scott–Jones (LSJ) lexicon** (117,129 unabridged entries) with beautifully styled noun declensions and verb principal parts.
 
-**v1.0.0** — Full unabridged LSJ with comprehensive styling, always-visible morphology tables, and hierarchical sense indentation.
+**v1.1.0** — Full unabridged LSJ with comprehensive styling, always-visible morphology tables, hierarchical sense indentation, reconstructed implicit "A"/"I" headings, and entry-level pronunciation/dialect preambles.
 
 ## ✨ Features
 
