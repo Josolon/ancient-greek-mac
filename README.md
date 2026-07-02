@@ -107,10 +107,12 @@ ancient-greek-mac/
 
 Contributions are welcome! Areas for improvement include:
 
+* **Weird/broken entries:** By far the most valuable contribution. With 117,129 entries auto-generated from TEI-XML, edge cases in the source encoding inevitably slip through (missing headings, mangled overview boxes, garbled citations, etc.). If you spot an entry that looks wrong in the Dictionary app, [open an issue](https://github.com/Josolon/ancient-greek-mac/issues) with the headword and a screenshot/description - or better yet, trace it to the parsing logic in `scripts/build_unabridged_xml.py` and send a PR.
 * **Styling:** Enhance CSS for better typography, colors, or responsive layout.
-* **Python scripts:** Optimize parsing, add error handling, or support additional morphology databases.
+* **Python scripts:** Optimize parsing, add error handling, or improve how the TEI-XML hierarchy (senses, headings, preambles) is reconstructed.
 * **Documentation:** Expand README, add usage guides, or create troubleshooting FAQs.
-* **Morphology data:** Map additional inflectional forms or refine existing mappings.
+
+**Not in scope here:** morphological data (declensions, principal parts, inflectional forms) comes from the upstream [Morpheus](https://github.com/perseids-project/morphology) database and is maintained by classicists there, not in this repo. If you find an incorrect or missing inflected form, please report it upstream rather than opening a PR against `data/morph.db` here.
 
 To contribute:
 1. Fork this repository.
