@@ -13,13 +13,16 @@ OUTPUT_XML_PATH = 'src/GreekDictionary.xml'
 
 # Classical six principal parts shown first, in traditional order.
 # Anything not in this set (Imperfect, Pluperfect, Future Perfect, etc.) goes to secondary.
+# NOTE: the morphology DB reports voice as "middle/passive" (not separate
+# "middle"/"passive" rows) for the present, imperfect, perfect, and pluperfect
+# systems, since Greek middle and passive forms are identical there - they only
+# diverge in the aorist and future systems. Matching on the combined label is
+# required, or these principal parts silently fall through to "secondary".
 PRINCIPAL_PARTS_ORDER = [
-    'Present Active', 'Present Middle', 'Present Passive',
-    'Future Active',  'Future Middle',
-    'Aorist Active',  'Aorist Middle',
-    'Perfect Active',
-    'Perfect Middle', 'Perfect Passive',
-    'Aorist Passive',
+    'Present Active', 'Present Middle/Passive',
+    'Future Active',  'Future Middle', 'Future Passive',
+    'Aorist Active',  'Aorist Middle', 'Aorist Passive',
+    'Perfect Active', 'Perfect Middle/Passive',
 ]
 PRINCIPAL_PARTS_PRIMARY = frozenset(PRINCIPAL_PARTS_ORDER)
 
@@ -340,7 +343,13 @@ def build_unabridged_dictionary():
                     if pos == 'verb':
                         is_verb = True
                         if person == '1st' and number == 'singular' and mood == 'indicative':
-                            label = f"{str(tense).capitalize()} {str(voice).capitalize()}".strip()
+                            # Title-case each word so multi-word tenses ("future
+                            # perfect") and combined voices ("middle/passive",
+                            # which is how identical middle/passive forms in the
+                            # present/perfect systems are stored) render cleanly.
+                            tense_display = " ".join(w.capitalize() for w in str(tense).split())
+                            voice_display = "/".join(w.capitalize() for w in str(voice).split("/"))
+                            label = f"{tense_display} {voice_display}".strip()
                             verb_principal_parts[label].add(disp_form)
                     elif pos in ('noun', 'adjective', 'article', 'pronoun'):
                         is_noun_adj = True
@@ -456,28 +465,42 @@ def build_unabridged_dictionary():
                     if entry_preamble:
                         out_xml.write(f'        <div class="entry-preamble">{html.escape(entry_preamble)}</div>\n')
 
-                if has_capitals:
-                    # Collect ONLY capitals for overview
+                # Decide the overview scheme from the RESOLVED labels (i.e. after
+                # the synthetic "A"/"I" reconstruction above), not the raw source
+                # letters. Two shapes occur:
+                #  - Multi-capital entries (A, B, C... e.g. παρά, εἰμί): each
+                #    capital re-starts its own Roman sub-numbering (I, II... under
+                #    A, then I, II... again under B). Those Romans are nested
+                #    sub-divisions, so only the capitals belong in the overview.
+                #  - Single-capital entries (just "A", real or synthesized, e.g.
+                #    ἀγαθός, μανθάνω, παιδεύω): the Roman numerals that follow are
+                #    NOT a nested sub-scheme restarting under a sibling capital -
+                #    they're peers continuing the same top-level enumeration. Both
+                #    the singleton "A" and every Roman numeral belong in the
+                #    overview, otherwise real, important senses (e.g. μανθάνω's
+                #    "A learn, esp. by study...") silently vanish from the box.
+                capital_labels_resolved = {
+                    label.rstrip('.') for _, label, _ in render_items
+                    if label and CAPITAL_LETTER_RE.match(label) and not ROMAN_NUM_RE.match(label)
+                }
+                capitals_only_scheme = len(capital_labels_resolved) >= 2
+
+                for s, label, is_synth in render_items:
+                    if not label or label == '•':
+                        continue
                     # IMPORTANT: Check ROMAN_NUM_RE before CAPITAL_LETTER_RE to prevent I/V/X confusion
-                    for s, label, is_synth in render_items:
-                        if not label or label == '•':
-                            continue
-                        # Skip Romans - they might match capital letter pattern (I, V, X)
-                        if ROMAN_NUM_RE.match(label):
-                            continue
-                        if CAPITAL_LETTER_RE.match(label):
-                            brief = extract_preamble_text(entry, head_node, for_overview=True) if is_synth else brief_sense_text(s, for_overview=True)
-                            if brief or is_synth:
-                                overview_items.append((label, brief))
-                else:
-                    # No capitals - collect ONLY Romans for overview
-                    for s, label, is_synth in render_items:
-                        if not label or label == '•':
-                            continue
-                        if ROMAN_NUM_RE.match(label):
-                            brief = extract_preamble_text(entry, head_node, for_overview=True) if is_synth else brief_sense_text(s, for_overview=True)
-                            # Always add Roman numerals to overview, even without text
-                            overview_items.append((label, brief if brief else ""))
+                    is_roman = bool(ROMAN_NUM_RE.match(label))
+                    is_capital = (not is_roman) and bool(CAPITAL_LETTER_RE.match(label))
+                    if not (is_capital or is_roman):
+                        continue
+                    if capitals_only_scheme and not is_capital:
+                        continue  # nested Roman sub-division under a sibling capital
+                    brief = extract_preamble_text(entry, head_node, for_overview=True) if is_synth else brief_sense_text(s, for_overview=True)
+                    if is_roman:
+                        # Always add Roman numerals to overview, even without text
+                        overview_items.append((label, brief if brief else ""))
+                    elif brief or is_synth:
+                        overview_items.append((label, brief))
                 
                 # Show overview if we have good content (at least 1 item)
                 if len(overview_items) >= 1:
