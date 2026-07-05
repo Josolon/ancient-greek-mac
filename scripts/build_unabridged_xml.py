@@ -77,6 +77,60 @@ ROMAN_NUM_RE = re.compile(r'^[IVXivx]+\.?$')
 ARABIC_NUM_RE = re.compile(r'^\d+\.?$')
 LOWER_LETTER_RE = re.compile(r'^[a-z]\.?$')
 
+_CITATION_ABBR_DOTTED_RE = re.compile(r'^(?:[A-Za-z]+\.)+$')   # "Il.", "A.", "D.H.", "PMag.Leid.W."
+_CITATION_ABBR_CAPS_RE = re.compile(r'^[A-Z]{2,4}$')            # "AP", "SIG", "CIG", "IG"
+_CITATION_NUMERAL_RE = re.compile(r'^\d+[a-z]?(?:[.,]\d+[a-z]?)*$')  # "9.116", "342b", "5053,5119"
+
+def _is_citation_abbr_atom(tok):
+    """A token that looks like an LSJ citation siglum (author/work abbreviation)."""
+    if not tok or not tok[0].isupper():
+        return False
+    if ROMAN_NUM_RE.match(tok.rstrip('.,;:')):
+        return False  # sense cross-refs (II, III...) aren't citation sigla
+    if _CITATION_ABBR_DOTTED_RE.match(tok):
+        return True
+    return bool(_CITATION_ABBR_CAPS_RE.match(tok.rstrip(',;:')))
+
+def _is_citation_numeral_atom(tok):
+    """A token that looks like a citation locator (book/line/page number)."""
+    core = tok.rstrip('.,;:()')
+    return bool(core) and bool(_CITATION_NUMERAL_RE.match(core))
+
+def strip_citation_apparatus(text, min_offset=5, lookahead=3):
+    """Cut brief text at the start of LSJ's citation apparatus.
+
+    Unlike parenthetical citations like "(Pl. ...)", LSJ's bare citations
+    (e.g. "Il. 9.116", "AP 7", "CIG 5053,5119") aren't wrapped in anything
+    distinctive, so a plain regex either misses them (no trailing period on
+    "AP") or clips grammatical register labels that share the same shape
+    ("Act.", "Dim.", "Pass." at the very start of a gloss). Instead, scan
+    token by token for a citation siglum that is itself followed - within a
+    short lookahead, skipping over further sigla - by a numeral; that
+    combination (siglum + locator) is the actual signature of a citation,
+    not just a capitalized abbreviation on its own.
+    """
+    tokens = text.split(' ')
+    offsets = []
+    pos = 0
+    for t in tokens:
+        offsets.append(pos)
+        pos += len(t) + 1
+
+    for i, tok in enumerate(tokens):
+        if not _is_citation_abbr_atom(tok) or offsets[i] <= min_offset:
+            continue
+        found_numeral, ok = False, True
+        for t2 in tokens[i + 1: i + 1 + lookahead]:
+            if _is_citation_numeral_atom(t2):
+                found_numeral = True
+                break
+            if not _is_citation_abbr_atom(t2):
+                ok = False
+                break
+        if ok and found_numeral:
+            return " ".join(tokens[:i]).rstrip(' ,;')
+    return text
+
 def sense_depth_from_n(n_val):
     """Infer visual indentation depth from the TEI sense n-attribute.
     
@@ -113,6 +167,7 @@ def _clean_and_truncate_brief(text, max_chars=200, for_overview=False):
         for_overview: If True, use a shorter limit and stop at the first sentence
     """
     # Remove citations and cross-references more aggressively
+    text = strip_citation_apparatus(text)  # bare citations, e.g. "Il. 9.116", "AP 7"
     text = re.sub(r'\s+\(cf\..*?\)', '', text, flags=re.DOTALL)  # (cf. ...)
     text = re.sub(r'\s+\([A-Z][a-z]+\..*?\)', '', text, flags=re.DOTALL)  # (Pl. ...), (Hdt. ...), etc
     text = re.sub(r'\s+v\.\s+.*$', '', text, flags=re.DOTALL)  # v. ref
@@ -182,16 +237,15 @@ def extract_preamble_text(entry, head_node, max_chars=200, for_overview=False):
     text = re.sub(r'^[\s,;:.\u2014-]+', '', text)
     return _clean_and_truncate_brief(text, max_chars=max_chars, for_overview=for_overview)
 
-def parse_sense_node(node, depth=0, num_override=None, is_functional_header=False):
+def parse_sense_node(node, depth=0, num_override=None):
     """
     Recursively processes mixed-content TEI sense blocks, translating
     inline language tags to clean, stylized HTML presentation layers.
-    
+
     Args:
         node: The TEI sense element
         depth: Visual indentation depth (0=top, 1=sub, 2=sub-sub, etc.)
         num_override: Custom number label to use instead of n-attribute
-        is_functional_header: If True, render as a section header (e.g., "WITH GEN. prop...")
     """
     sense_html = ""
     num_marker = num_override if num_override else clean_text_for_apple(node.attrib.get('n', ''))
@@ -366,20 +420,7 @@ def build_unabridged_dictionary():
                 
                 all_senses = [c for c in entry.iter() if c.tag.split('}')[-1] == 'sense']
 
-                # Helper function to detect functional headers (capital letters with keywords)
-                def is_func_header_candidate(sense_text):
-                    """Check if text looks like a functional/case-governance header."""
-                    text = clean_text_for_apple(sense_text or '').strip().lower()
-                    if len(text) < 8:  # Minimum meaningful length
-                        return False
-                    # Check for explicit case governance or relational keywords
-                    keywords = ['with gen', 'with dat', 'with acc', 'with abl',
-                               'introducing', 'denoting', 'forming',
-                               'absol.', 'of place', 'in predicative', 'in compos',
-                               'governing', 'c. gen', 'c. acc', 'c. dat']
-                    return any(text.startswith(kw.lower()) for kw in keywords)
-                
-                # Build overview: 
+                # Build overview:
                 # - If entry has capitals: show ONLY capitals
                 # - If entry has NO capitals: show ONLY Romans
                 overview_items = []
@@ -530,7 +571,7 @@ def build_unabridged_dictionary():
                     depth = sense_depth_from_n(label)
                     
                     # Render as regular sense
-                    definitions_html += parse_sense_node(s, depth=depth, num_override=label, is_functional_header=False)
+                    definitions_html += parse_sense_node(s, depth=depth, num_override=label)
                 
                 if not definitions_html:
                     fallback_text = "".join(entry.itertext()).strip()
