@@ -139,6 +139,37 @@ div.entry-preamble {
     font-size: 0.95em;
 }
 
+/* --- Grammar (part of speech, gender, declension class, dialect/voice) --- */
+div.entry-grammar {
+    margin: 2px 0 4px 0;
+}
+
+span.gram-badge {
+    display: inline-block;
+    margin: 0 6px 4px 0;
+    padding: 1px 8px;
+    background-color: #edf1fb;
+    border: 1px solid #c8d4ee;
+    border-radius: 10px;
+    color: #2a4a9a;
+    font-size: 0.82em;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+/* --- Etymology (LSJ's bare "derived from X" cross-reference) --- */
+div.entry-etymology {
+    margin: 2px 0 8px 0;
+    color: #444;
+    font-size: 0.92em;
+}
+
+span.etym-label {
+    font-weight: 600;
+    color: #667;
+    margin-right: 4px;
+}
+
 /* --- Morphology Section --- */
 div.morph-section {
     margin-top: 14px;

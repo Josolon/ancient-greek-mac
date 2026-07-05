@@ -237,6 +237,99 @@ def extract_preamble_text(entry, head_node, max_chars=200, for_overview=False):
     text = re.sub(r'^[\s,;:.\u2014-]+', '', text)
     return _clean_and_truncate_brief(text, max_chars=max_chars, for_overview=for_overview)
 
+GENDER_LABELS = {
+    'ὁ': 'masc.', 'οἱ': 'masc. pl.',
+    'ἡ': 'fem.', 'αἱ': 'fem. pl.', 'ἁ': 'fem.',
+    'τό': 'neut.', 'τά': 'neut. pl.',
+}
+POS_LABELS = {
+    'Adv.': 'adverb', 'adv.': 'adverb',
+    'Adj.': 'adjective',
+    'Subst.': 'substantive',
+}
+GRAM_TYPE_LABELS = {
+    'dialect': None,  # already a human-readable abbreviation, e.g. "Ep.", "Dor." - shown as-is
+    'voice': 'voice',
+    'comp': 'comparative',
+    'dim': 'diminutive',
+    'var': 'variant',
+}
+
+def extract_grammar_and_etymology(entry, head_node):
+    """Pull structured grammar (part of speech, gender, declension class,
+    dialect/voice/comparative/diminutive/variant labels) and etymology
+    (LSJ's bare "derived from X" cross-reference) out of the entry's
+    preamble - the region between the headword and the first <sense>,
+    where ~90%+ of these tags live in the source (the rest are per-sense
+    notes, e.g. "as Subst." on one numbered sense, and are left as-is in
+    that sense's own text rather than hoisted up here).
+    """
+    children = list(entry)
+    if head_node not in children:
+        return {}
+    preamble_nodes = []
+    for child in children[children.index(head_node) + 1:]:
+        if child.tag.split('}')[-1] == 'sense':
+            break
+        preamble_nodes.append(child)
+
+    def collect(tag):
+        seen, out = set(), []
+        for node in preamble_nodes:
+            for sub in node.iter(tag):
+                val = clean_text_for_apple("".join(sub.itertext())).strip()
+                if val and val not in seen:
+                    seen.add(val)
+                    out.append(val)
+        return out
+
+    gram_pairs = []
+    seen_gram = set()
+    for node in preamble_nodes:
+        for gram in node.iter('gram'):
+            gtype = gram.attrib.get('type', '')
+            gtext = clean_text_for_apple("".join(gram.itertext())).strip()
+            key = (gtype, gtext)
+            if gtext and key not in seen_gram:
+                seen_gram.add(key)
+                gram_pairs.append(key)
+
+    return {
+        'pos': collect('pos'),
+        'gen': collect('gen'),
+        'itype': collect('itype'),
+        'gram': gram_pairs,
+        'etym': collect('etym'),
+    }
+
+def render_grammar_html(info):
+    """Build the labeled 'Grammar' badge row from extract_grammar_and_etymology's
+    output. Returns "" if there's nothing to show."""
+    badges = []
+    for pos in info.get('pos', []):
+        badges.append(POS_LABELS.get(pos, pos))
+    for gen in info.get('gen', []):
+        badges.append(GENDER_LABELS.get(gen, gen))
+    if info.get('itype'):
+        badges.append('decl. ' + ', '.join(info['itype']))
+    for gtype, gtext in info.get('gram', []):
+        label = GRAM_TYPE_LABELS.get(gtype, gtype)
+        badges.append(gtext if label is None else f'{label}: {gtext}')
+    if not badges:
+        return ""
+    spans = "".join(f'<span class="gram-badge">{html.escape(b)}</span>' for b in badges)
+    return f'        <div class="entry-grammar">{spans}</div>\n'
+
+def render_etymology_html(info):
+    """Build the 'Related to: X' etymology line. Returns "" if there's nothing
+    to show. LSJ's <etym> is a bare cross-reference, not prose derivation
+    history, so this is intentionally a single labeled line, not a narrative."""
+    etyms = info.get('etym', [])
+    if not etyms:
+        return ""
+    words = ", ".join(f'<b class="gk-word">{html.escape(e)}</b>' for e in etyms)
+    return f'        <div class="entry-etymology"><span class="etym-label">Related to:</span> {words}</div>\n'
+
 def parse_sense_node(node, depth=0, num_override=None):
     """
     Recursively processes mixed-content TEI sense blocks, translating
@@ -416,6 +509,11 @@ def build_unabridged_dictionary():
                         out_xml.write(f'        <d:index d:value="{html.escape(clean_kw)}"/>\n')
 
                 out_xml.write(f'        <h1 class="entry-lemma">{html.escape(raw_lemma)}</h1>\n')
+
+                grammar_info = extract_grammar_and_etymology(entry, head_node)
+                out_xml.write(render_grammar_html(grammar_info))
+                out_xml.write(render_etymology_html(grammar_info))
+
                 out_xml.write('        <div class="definition">\n')
                 
                 all_senses = [c for c in entry.iter() if c.tag.split('}')[-1] == 'sense']
