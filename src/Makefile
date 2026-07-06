@@ -4,11 +4,16 @@
 
 .PHONY: all install clean
 
-# 1. Safe, space-free filesystem name for compiling
+# 1. Safe, space-free filesystem names for compiling
 DICT_NAME        = AncientGreekDictionary
 DICT_SRC_PATH    = GreekDictionary.xml
 DICT_CSS_PATH    = GreekDictionary.css
 DICT_PLIST_PATH  = GreekDictionary.plist
+
+DICT2_NAME       = GreekGrammarReference
+DICT2_SRC_PATH   = GrammarReference.xml
+DICT2_CSS_PATH   = GrammarReference.css
+DICT2_PLIST_PATH = GrammarReference.plist
 
 # 2. Your Computer-Wide Compiler Path
 DICT_DEV_KIT_OBJ_DIR = /Applications/XcodeAdditionalTools/Utilities/DictionaryDevelopmentKit
@@ -26,15 +31,23 @@ INSTALL_DIR      = $(HOME)/Library/Dictionaries
 all:
 	@echo "🏗️  Compiling macOS Dictionary (Safe-Name Mode)..."
 	"$(BUILD_DICT_XML)" "$(DICT_NAME)" $(DICT_SRC_PATH) $(DICT_CSS_PATH) $(DICT_PLIST_PATH)
+	rm -rf "$(DICT_NAME).dictionary"
+	cp -R "objects/$(DICT_NAME).dictionary" ./
+	"$(BUILD_DICT_XML)" "$(DICT2_NAME)" $(DICT2_SRC_PATH) $(DICT2_CSS_PATH) $(DICT2_PLIST_PATH)
+	rm -rf "$(DICT2_NAME).dictionary"
+	cp -R "objects/$(DICT2_NAME).dictionary" ./
 
 install: all
-	@echo "🚀 Automatically moving bundle to $(INSTALL_DIR)..."
+	@echo "🚀 Automatically moving bundles to $(INSTALL_DIR)..."
 	mkdir -p "$(INSTALL_DIR)"
 	rm -rf "$(INSTALL_DIR)/$(DICT_NAME).dictionary"
-	cp -R "objects/$(DICT_NAME).dictionary" "$(INSTALL_DIR)/"
+	cp -R "$(DICT_NAME).dictionary" "$(INSTALL_DIR)/"
+	rm -rf "$(INSTALL_DIR)/$(DICT2_NAME).dictionary"
+	cp -R "$(DICT2_NAME).dictionary" "$(INSTALL_DIR)/"
 	@echo "✅ Installed successfully! Refresh your Dictionary app Settings."
 
 clean:
 	@echo "🧹 Cleaning up build artifacts..."
 	$(RM) -rf $(DICT_BUILD_DIR)
 	$(RM) -rf "$(DICT_NAME).dictionary"
+	$(RM) -rf "$(DICT2_NAME).dictionary"

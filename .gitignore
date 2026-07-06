@@ -247,3 +247,13 @@ src/GreekDictionary.xml
 # Ignore Apple Dictionary Development Kit build artifacts
 src/objects/
 src/*.dictionary
+
+# Ignore Smyth/Goodwin source data (fetched from Perseus, see README)
+data/smyth_html/
+data/goodwin.xml
+
+# Ignore generated word index (built by scripts/build_grammar_reference.py)
+data/grammar_word_index.json
+
+# Ignore generated grammar reference dictionary source XML
+src/GrammarReference.xml

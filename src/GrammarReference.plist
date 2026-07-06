@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.jonatansolon.dictionary.GreekGrammarReference</string>
+	<key>CFBundleName</key>
+	<string>Greek Grammar Reference</string>
+	<key>CFBundleDisplayName</key>
+	<string>Ancient Greek Grammar (Smyth &amp; Goodwin)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>DCSDictionaryCopyright</key>
+	<string>Herbert Weir Smyth, A Greek Grammar for Colleges (1920) and William Watson Goodwin, Syntax of the Moods and Tenses of the Greek Verb (1889), both via the Perseus Digital Library, Tufts University. Curated by Jónatan Sólon.</string>
+	<key>DCSDictionaryManufacturerName</key>
+	<string>Jónatan Sólon</string>
+	<key>DCSDictionaryFrontMatterWindowSize</key>
+	<string>0.5</string>
+</dict>
+</plist>

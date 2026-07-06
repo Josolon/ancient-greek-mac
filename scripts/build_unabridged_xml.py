@@ -1,3 +1,4 @@
+import json
 import os
 import sqlite3
 import html
@@ -10,6 +11,13 @@ from collections import defaultdict
 TEI_XML_DIR = 'data/lsj_unicode/'
 MORPH_DB_PATH = 'data/morph.db'
 OUTPUT_XML_PATH = 'src/GreekDictionary.xml'
+GRAMMAR_WORD_INDEX_PATH = 'data/grammar_word_index.json'
+# Below this many paragraph references across Smyth+Goodwin, a word is more
+# likely a one-off example citation than an entry the grammars are actually
+# *about* - particles/conjunctions/verbs-with-special-constructions clear
+# this easily (ἄν: 370, μή: 253, βούλομαι: 15); ordinary vocabulary quoted
+# once or twice in an illustrative sentence doesn't.
+GRAMMAR_CROSSREF_MIN_REFS = 3
 
 # Classical six principal parts shown first, in traditional order.
 # Anything not in this set (Imperfect, Pluperfect, Future Perfect, etc.) goes to secondary.
@@ -375,6 +383,41 @@ def render_etymology_html(info):
     words = ", ".join(f'<b class="gk-word">{html.escape(e)}</b>' for e in etyms)
     return f'        <div class="entry-etymology"><span class="etym-label">Related to:</span> {words}</div>\n'
 
+def load_grammar_word_index():
+    """Loads the word -> [(source, paragraph number), ...] index built by
+    build_grammar_reference.py from Smyth's and Goodwin's grammars. Optional:
+    the main LSJ build still works without it (e.g. before that script has
+    been run), just without the cross-reference line."""
+    if not os.path.exists(GRAMMAR_WORD_INDEX_PATH):
+        print(f"⚠️  {GRAMMAR_WORD_INDEX_PATH} not found - skipping grammar cross-references "
+              f"(run scripts/build_grammar_reference.py first to enable them).")
+        return {}
+    with open(GRAMMAR_WORD_INDEX_PATH, encoding='utf-8') as f:
+        raw = json.load(f)
+    return {word.lower(): [tuple(ref) for ref in refs] for word, refs in raw.items()}
+
+def render_grammar_crossref_html(refs):
+    """Build the 'Grammar & Syntax: see Smyth/Goodwin' line for a headword
+    that Smyth and/or Goodwin discuss by name (particles, conjunctions, and
+    verbs taking special constructions - not ordinary vocabulary, which this
+    is filtered against via GRAMMAR_CROSSREF_MIN_REFS before being called).
+    Only cites a handful of paragraphs per source plus a total count, since
+    some particles (e.g. ἄν) have hundreds of references."""
+    by_source = defaultdict(list)
+    for source, num in refs:
+        by_source[source].append(num)
+    parts = []
+    for source in ('Smyth', 'Goodwin'):
+        nums = sorted(set(by_source.get(source, [])))
+        if not nums:
+            continue
+        shown = ", ".join(str(n) for n in nums[:5])
+        suffix = f', et al. ({len(nums)} total)' if len(nums) > 5 else ''
+        parts.append(f'{source} §{shown}{suffix}')
+    if not parts:
+        return ""
+    return f'        <div class="entry-grammar-crossref"><span class="etym-label">Grammar &amp; Syntax:</span> {"; ".join(parts)}</div>\n'
+
 def parse_sense_node(node, depth=0, num_override=None):
     """
     Recursively processes mixed-content TEI sense blocks, translating
@@ -449,6 +492,8 @@ def build_unabridged_dictionary():
 
     morph_conn = sqlite3.connect(MORPH_DB_PATH)
     morph_cursor = morph_conn.cursor()
+
+    grammar_word_index = load_grammar_word_index()
 
     if not os.path.exists(TEI_XML_DIR):
         print(f"❌ Error: Target repository path missing at {TEI_XML_DIR}")
@@ -566,6 +611,10 @@ def build_unabridged_dictionary():
                 grammar_info = extract_grammar_and_etymology(get_preamble_children(entry, head_node))
                 out_xml.write(render_grammar_html(grammar_info))
                 out_xml.write(render_etymology_html(grammar_info))
+
+                grammar_refs = grammar_word_index.get(strip_all_greek_accents(raw_lemma).lower(), [])
+                if len(grammar_refs) >= GRAMMAR_CROSSREF_MIN_REFS:
+                    out_xml.write(render_grammar_crossref_html(grammar_refs))
 
                 out_xml.write('        <div class="definition">\n')
                 

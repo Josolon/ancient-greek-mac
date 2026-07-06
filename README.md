@@ -13,15 +13,18 @@ A custom `.dictionary` plugin for the native macOS Dictionary app and system-wid
 * **System Integration:** Works natively with macOS "Look Up" (Force Click or Three-Finger Tap on any word).
 * **Morphology Tables:** Declensions and principal parts always visible (no folds). Declension tables show all cases and numbers; principal parts organized in classical order (Present → Future → Aorist → Perfect).
 * **Hierarchical Sense Indentation:** Major senses (I, II, III…) styled as visual subheadings; sub-senses indented with subtle left borders for visual hierarchy.
+* **Grammar & Etymology:** Part of speech, gender, declension class, and dialect/voice/comparative/diminutive labels are pulled out of LSJ's own TEI tags into a labeled badge row, both at the entry level and on individual senses (e.g. a sense marked "as Subst." shows a `substantive` badge right there). A bare "Related to: X" etymology line surfaces LSJ's own cross-reference where the source has one.
+* **Grammar & Syntax cross-references:** Particles, conjunctions, and verbs with special constructions (ἄν, γάρ, ὅτι, βούλομαι, τυγχάνω, …) are cross-referenced to the specific paragraphs of Smyth's and Goodwin's reference grammars that discuss them.
+* **Companion "Greek Grammar Reference" dictionary:** A second `.dictionary` bundle covering ~700 topics from Smyth's *A Greek Grammar for Colleges* and Goodwin's *Syntax of the Moods and Tenses of the Greek Verb*, searchable both by topic ("Genitive Absolute", "Conditional Sentences", …) and by canonical citation (`S. 2070`, `Smyth 2070`, `G. 473`, `Goodwin 473`).
 * **Polytonic Support:** Handles Greek diacritics and polytonic accents smoothly within Apple's search engine.
 
 ## 📦 Installation (For End Users)
 
 1. Download the latest release from the [Releases](https://github.com/Josolon/ancient-greek-mac/releases) page.
-2. Unzip the `.zip` file to get `AncientGreek.dictionary`.
+2. Unzip the `.zip` file to get `AncientGreek.dictionary` and `GreekGrammarReference.dictionary`.
 3. Open Finder, press `Cmd + Shift + G`, and navigate to `~/Library/Dictionaries/`.
-4. Drag and drop the `AncientGreek.dictionary` folder into this location.
-5. Open the macOS **Dictionary app**, go to **Settings**, and enable "Ancient Greek (LSJ)".
+4. Drag and drop both `.dictionary` folders into this location.
+5. Open the macOS **Dictionary app**, go to **Settings**, and enable "Ancient Greek (LSJ)" and/or "Ancient Greek Grammar (Smyth & Goodwin)".
 
 ## 🛠️ Building from Source
 
@@ -50,6 +53,16 @@ python3 scripts/build_unabridged_xml.py
 cd src && make install
 ```
 
+#### **`scripts/build_grammar_reference.py`** — Companion Grammar Reference dictionary
+Compiles Smyth's and Goodwin's reference grammars into the second `.dictionary` bundle, and emits `data/grammar_word_index.json` (a Greek word → paragraph-reference index) that `build_unabridged_xml.py` reads to add "Grammar & Syntax" cross-references to LSJ's particle/conjunction entries. Run this *before* `build_unabridged_xml.py` if you want those cross-references included - it's optional; the main dictionary still builds fine without it.
+
+```bash
+python3 scripts/fetch_grammar_sources.py   # one-time: vendors Smyth + Goodwin into data/
+python3 scripts/build_grammar_reference.py
+python3 scripts/build_unabridged_xml.py
+cd src && make install
+```
+
 ### Full Build Instructions
 
 1. Clone this repository:
@@ -58,17 +71,23 @@ cd src && make install
    cd ancient-greek-mac
    ```
 
-2. Run the XML generation script (choose one):
+2. (Optional, for grammar cross-references) Fetch and build the grammar reference sources:
+   ```bash
+   python3 scripts/fetch_grammar_sources.py
+   python3 scripts/build_grammar_reference.py
+   ```
+
+3. Run the XML generation script (choose one):
    - **For development:** `python3 scripts/build_xml.py`
    - **For official build:** `python3 scripts/build_unabridged_xml.py`
 
-3. Compile and install the dictionary:
+4. Compile and install both dictionaries:
    ```bash
    cd src
    make install
    ```
 
-4. Open the **Dictionary** app, go to **Settings**, toggle "Ancient Greek" off and back on to reload.
+5. Open the **Dictionary** app, go to **Settings**, toggle "Ancient Greek" and "Ancient Greek Grammar" off and back on to reload.
 
 ### CSS Styling
 
@@ -85,15 +104,23 @@ ancient-greek-mac/
 ├── data/
 │   ├── lsj_unicode/           # Chicago TEI-XML LSJ source (86 files)
 │   ├── lsj.db                 # SQLite LSJ entries [gitignored]
-│   └── morph.db               # SQLite morphology data [gitignored]
+│   ├── morph.db                # SQLite morphology data [gitignored]
+│   ├── smyth_html/             # Smyth grammar HTML chapters [gitignored, fetched]
+│   ├── goodwin.xml             # Goodwin grammar TEI-XML [gitignored, fetched]
+│   └── grammar_word_index.json # Word → Smyth/Goodwin paragraph index [gitignored, generated]
 ├── scripts/
 │   ├── build_xml.py           # Abridged builder (SQLite → XML)
-│   └── build_unabridged_xml.py # Full LSJ builder (TEI-XML → XML)
+│   ├── build_unabridged_xml.py # Full LSJ builder (TEI-XML → XML)
+│   ├── fetch_grammar_sources.py # Vendors Smyth + Goodwin from Perseus
+│   └── build_grammar_reference.py # Grammar Reference dictionary + word index builder
 ├── src/
-│   ├── GreekDictionary.xml    # Generated dictionary source [gitignored]
-│   ├── GreekDictionary.css    # Dictionary styling
-│   ├── GreekDictionary.plist  # Apple Dictionary metadata
-│   ├── Makefile               # Build rules
+│   ├── GreekDictionary.xml    # Generated LSJ dictionary source [gitignored]
+│   ├── GreekDictionary.css    # LSJ dictionary styling
+│   ├── GreekDictionary.plist  # LSJ Apple Dictionary metadata
+│   ├── GrammarReference.xml   # Generated Grammar Reference source [gitignored]
+│   ├── GrammarReference.css   # Grammar Reference styling
+│   ├── GrammarReference.plist # Grammar Reference Apple Dictionary metadata
+│   ├── Makefile               # Build rules for both bundles
 │   └── objects/               # Build artifacts [gitignored]
 └── README.md
 ```
@@ -102,6 +129,7 @@ ancient-greek-mac/
 
 * **LSJ Lexicon:** Complete Liddell–Scott–Jones ancient Greek dictionary, provided by the [Chicago Digital Classics](https://github.com/perseids-project/morphology) project in TEI-XML format.
 * **Morphology:** Ancient Greek inflectional morphology from [Morpheus](https://github.com/perseids-project/morphology), integrated for noun declension and verb principal parts tables.
+* **Grammar Reference:** Herbert Weir Smyth, *A Greek Grammar for Colleges* (1920), via [PerseusDL/sg_reader](https://github.com/PerseusDL/sg_reader); William Watson Goodwin, *Syntax of the Moods and Tenses of the Greek Verb* (1889), via the [Perseus Digital Library](https://www.perseus.tufts.edu/). Both public domain, freely redistributable with attribution per Perseus's standard text-reuse policy.
 
 ## 🤝 Contributing
 
@@ -126,11 +154,13 @@ This project uses a **dual-license model**:
 
 - **Code** (Python scripts, CSS, Makefile): [MIT License](LICENSE)
 - **Data** (LSJ lexicon, morphology): [Creative Commons Attribution-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0/) (per Chicago Digital Classics)
+- **Grammar Reference data** (Smyth, Goodwin): public domain texts, redistributed per the Perseus Digital Library's standard policy - freely distributable with attribution to Perseus, National Endowment for the Humanities funding, and the original authors.
 
-See [LICENSE](LICENSE) for full details. When distributing this dictionary, both licenses apply.
+See [LICENSE](LICENSE) for full details. When distributing this dictionary, all applicable licenses apply.
 
 ## 🙏 Acknowledgments
 
 * **Liddell, Scott, Jones (LSJ):** The foundational ancient Greek lexicon.
-* **Perseus Digital Library / Perseids:** For TEI-XML source data and morphology tooling.
+* **Herbert Weir Smyth** and **William Watson Goodwin:** Authors of the reference grammars behind the Grammar Reference dictionary and the Grammar & Syntax cross-references.
+* **Perseus Digital Library / Perseids:** For TEI-XML source data, morphology tooling, and the Smyth/Goodwin digitizations (funded in part by the National Endowment for the Humanities).
 * **Apple Dictionary Development Kit:** For the macOS `.dictionary` format specification.

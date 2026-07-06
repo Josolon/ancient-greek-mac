@@ -1,0 +1,31 @@
+/* GrammarReference.css */
+
+body {
+    font-family: -apple-system, "Helvetica Neue", "Lucida Grande", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #1a1a1a;
+}
+
+h1.grammar-heading {
+    font-family: "New Athena Unicode", "Noto Serif", Georgia, serif;
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #1a1a4e;
+    margin: 0 0 4px 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #c0c8e0;
+}
+
+div.grammar-citation {
+    color: #2a4a9a;
+    font-size: 0.85em;
+    font-weight: 600;
+    margin-bottom: 10px;
+    letter-spacing: 0.02em;
+}
+
+div.grammar-body {
+    font-size: 1em;
+    line-height: 1.6;
+}
