@@ -179,9 +179,16 @@ def _clean_and_truncate_brief(text, max_chars=200, for_overview=False):
     # For overview, use a longer-but-still-brief limit and stop at the first
     # full sentence (period) rather than the first comma, so the reader gets
     # at least "the first line" of meaningful context rather than one word.
+    # A bare "first period in the string" is the wrong test: LSJ is full of
+    # abbreviation dots that aren't sentence ends (author sigla like "Hdt.",
+    # "S.", or a self-referential single-letter shorthand for the entry's own
+    # headword, e.g. "λ." standing in for λόγος inside its own definition) -
+    # matching on those truncates mid-thought and leaves a dangling letter.
+    # A real sentence boundary in these glosses is followed by a capitalized
+    # English word (the next clause) or is the end of the string outright.
     if for_overview:
         max_chars = min(150, max_chars)
-        match = re.search(r'\.', text)
+        match = re.search(r'\.(?=\s+[A-Z]|\s*$)', text)
         if match and match.start() > 5:  # Only if meaningful content before
             text = text[:match.start()].strip()
     
