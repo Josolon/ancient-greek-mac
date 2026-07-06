@@ -262,29 +262,49 @@ GRAM_TYPE_LABELS = {
     'var': 'variant',
 }
 
-def extract_grammar_and_etymology(entry, head_node):
-    """Pull structured grammar (part of speech, gender, declension class,
-    dialect/voice/comparative/diminutive/variant labels) and etymology
-    (LSJ's bare "derived from X" cross-reference) out of the entry's
-    preamble - the region between the headword and the first <sense>,
-    where ~90%+ of these tags live in the source (the rest are per-sense
-    notes, e.g. "as Subst." on one numbered sense, and are left as-is in
-    that sense's own text rather than hoisted up here).
-    """
+def get_preamble_children(entry, head_node):
+    """The entry's preamble: children directly under the entry, after the
+    headword and before the first <sense>. This is where ~90%+ of grammar/
+    etymology tags live (the rest are per-sense notes, e.g. "as Subst." on
+    one numbered sense - see extract_grammar_and_etymology, which handles
+    both regions with the same logic)."""
     children = list(entry)
     if head_node not in children:
-        return {}
+        return []
     preamble_nodes = []
     for child in children[children.index(head_node) + 1:]:
         if child.tag.split('}')[-1] == 'sense':
             break
         preamble_nodes.append(child)
+    return preamble_nodes
+
+def _flatten_region(nodes):
+    """Flatten a list of elements into themselves plus all descendants,
+    without crossing into a nested <sense> - those are rendered as their
+    own independent sense blocks elsewhere, so their grammar/etymology tags
+    belong to that sense's own extraction call, not this region's."""
+    out = []
+    for node in nodes:
+        if node.tag.split('}')[-1] == 'sense':
+            continue
+        out.append(node)
+        out.extend(_flatten_region(list(node)))
+    return out
+
+def extract_grammar_and_etymology(region_nodes):
+    """Pull structured grammar (part of speech, gender, declension class,
+    dialect/voice/comparative/diminutive/variant labels) and etymology
+    (LSJ's bare "derived from X" cross-reference) out of a region of the
+    entry - either its preamble (get_preamble_children) or a single sense's
+    own content (its direct children, excluding nested sub-senses).
+    """
+    flat = _flatten_region(region_nodes)
 
     def collect(tag):
         seen, out = set(), []
-        for node in preamble_nodes:
-            for sub in node.iter(tag):
-                val = clean_text_for_apple("".join(sub.itertext())).strip()
+        for node in flat:
+            if node.tag.split('}')[-1] == tag:
+                val = clean_text_for_apple("".join(node.itertext())).strip()
                 if val and val not in seen:
                     seen.add(val)
                     out.append(val)
@@ -292,10 +312,10 @@ def extract_grammar_and_etymology(entry, head_node):
 
     gram_pairs = []
     seen_gram = set()
-    for node in preamble_nodes:
-        for gram in node.iter('gram'):
-            gtype = gram.attrib.get('type', '')
-            gtext = clean_text_for_apple("".join(gram.itertext())).strip()
+    for node in flat:
+        if node.tag.split('}')[-1] == 'gram':
+            gtype = node.attrib.get('type', '')
+            gtext = clean_text_for_apple("".join(node.itertext())).strip()
             key = (gtype, gtext)
             if gtext and key not in seen_gram:
                 seen_gram.add(key)
@@ -309,9 +329,10 @@ def extract_grammar_and_etymology(entry, head_node):
         'etym': collect('etym'),
     }
 
-def render_grammar_html(info):
-    """Build the labeled 'Grammar' badge row from extract_grammar_and_etymology's
-    output. Returns "" if there's nothing to show."""
+def _build_grammar_badges(info):
+    """Turn extract_grammar_and_etymology's output into a list of human-
+    readable badge labels (part of speech, gender, declension suffix,
+    dialect/voice/comparative/diminutive/variant)."""
     badges = []
     for pos in info.get('pos', []):
         badges.append(POS_LABELS.get(pos, pos))
@@ -322,10 +343,27 @@ def render_grammar_html(info):
     for gtype, gtext in info.get('gram', []):
         label = GRAM_TYPE_LABELS.get(gtype, gtype)
         badges.append(gtext if label is None else f'{label}: {gtext}')
+    return badges
+
+def render_grammar_html(info):
+    """Build the labeled 'Grammar' badge row for the whole entry, sourced
+    from its preamble. Returns "" if there's nothing to show."""
+    badges = _build_grammar_badges(info)
     if not badges:
         return ""
     spans = "".join(f'<span class="gram-badge">{html.escape(b)}</span>' for b in badges)
     return f'        <div class="entry-grammar">{spans}</div>\n'
+
+def render_sense_grammar_badges(info):
+    """Same badge content as render_grammar_html, but as bare inline spans
+    (no wrapping block div) meant to sit inside a single sense's own div,
+    right before its body text - for grammar tags nested on one specific
+    numbered sense (e.g. "as Subst." on just sense II) rather than the whole
+    entry. Returns "" if there's nothing to show."""
+    badges = _build_grammar_badges(info)
+    if not badges:
+        return ""
+    return "".join(f'<span class="sense-gram-badge">{html.escape(b)}</span> ' for b in badges)
 
 def render_etymology_html(info):
     """Build the 'Related to: X' etymology line. Returns "" if there's nothing
@@ -378,20 +416,28 @@ def parse_sense_node(node, depth=0, num_override=None):
             
     inline_content = " ".join(fragments)
     inline_content = re.sub(r'\s+', ' ', inline_content).strip()
-    
+
+    # Grammar tags nested on this specific sense (e.g. "as Subst." marking
+    # just one numbered sense as a different part of speech) - the majority
+    # of <pos>/<gramGrp> occurrences are here rather than in the entry
+    # preamble, so they need their own extraction pass per sense.
+    sense_grammar_badges = render_sense_grammar_badges(extract_grammar_and_etymology(list(node)))
+
     # Mark Roman numerals (depth 1) as major sense sections
     is_major = bool(depth == 1 and num_marker and ROMAN_NUM_RE.match(num_marker.strip()))
-    
+
     if num_marker or inline_content:
         depth_class = f'sense-depth-{min(depth, 4)}'
         major_class = ' sense-major' if is_major else ''
         sense_html += f'<div class="sense {depth_class}{major_class}">'
         if num_marker:
             sense_html += f'<span class="sense-num">{html.escape(num_marker)}</span> '
+        if sense_grammar_badges:
+            sense_html += sense_grammar_badges
         if inline_content:
             sense_html += f'<span class="sense-body">{inline_content}</span>'
         sense_html += '</div>'
-        
+
     return sense_html
 
 def build_unabridged_dictionary():
@@ -517,7 +563,7 @@ def build_unabridged_dictionary():
 
                 out_xml.write(f'        <h1 class="entry-lemma">{html.escape(raw_lemma)}</h1>\n')
 
-                grammar_info = extract_grammar_and_etymology(entry, head_node)
+                grammar_info = extract_grammar_and_etymology(get_preamble_children(entry, head_node))
                 out_xml.write(render_grammar_html(grammar_info))
                 out_xml.write(render_etymology_html(grammar_info))
 

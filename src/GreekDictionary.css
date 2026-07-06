@@ -157,6 +157,18 @@ span.gram-badge {
     letter-spacing: 0.02em;
 }
 
+/* Sense-level grammar badge: same info as entry-grammar's gram-badge, but
+   for a tag nested on one specific sense (e.g. "as Subst." on sense II)
+   rather than the whole entry - smaller and unboxed so it reads as part of
+   that sense's own line rather than a headword-level property. */
+span.sense-gram-badge {
+    color: #5a6b99;
+    font-size: 0.85em;
+    font-weight: 600;
+    font-style: italic;
+    margin-right: 4px;
+}
+
 /* --- Etymology (LSJ's bare "derived from X" cross-reference) --- */
 div.entry-etymology {
     margin: 2px 0 8px 0;
