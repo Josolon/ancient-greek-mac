@@ -73,12 +73,41 @@ def normalize_acute_to_grave(text):
 def strip_all_greek_accents(text):
     """Strips every combining diacritic for fully accent-insensitive fallback lookup."""
     if not text: return ""
-    # Combining: grave 0300, acute 0301, circumflex 0302, macron 0304, breve 0306,
-    # diaeresis 0308, smooth breathing 0313, rough breathing 0314, iota subscript 0345
-    STRIP = {0x0300,0x0301,0x0302,0x0304,0x0306,0x0308,0x0313,0x0314,0x0345}
+    # Combining: grave 0300, acute 0301, macron 0304, breve 0306, diaeresis 0308,
+    # smooth breathing 0313, rough breathing 0314, iota subscript 0345.
+    # Circumflex is 0342 (COMBINING GREEK PERISPOMENI) - NOT 0302, the generic/
+    # Latin combining circumflex, which real NFD-decomposed Greek never produces.
+    STRIP = {0x0300,0x0301,0x0304,0x0306,0x0308,0x0313,0x0314,0x0342,0x0345}
     decomposed = unicodedata.normalize('NFD', text)
     filtered = "".join(ch for ch in decomposed if ord(ch) not in STRIP)
     return unicodedata.normalize('NFC', filtered)
+
+_GREEK_VOWELS = 'αεηιουω'
+_ACCENT_MARK_CODEPOINTS = {0x0301, 0x0300, 0x0342}  # acute, grave, circumflex
+
+def add_enclitic_accent_variant(text):
+    """A paroxytone/proparoxytone word gains an ADDED acute on its final
+    vowel when immediately followed by an enclitic in running text (e.g.
+    ἄνθρωπος -> ἄνθρωπός before τις/ἐστι/μου/...) - the word ends up
+    carrying two accents at once. Returns that variant so a reader's exact
+    copy-selected text still resolves via Look Up, or None if the final
+    vowel already carries an accent (oxytone/perispomenon words keep their
+    own instead of gaining a second one, so no variant applies)."""
+    if not text: return None
+    decomposed = unicodedata.normalize('NFD', text)
+    last_vowel_idx = None
+    for i, ch in enumerate(decomposed):
+        if ch.lower() in _GREEK_VOWELS:
+            last_vowel_idx = i
+    if last_vowel_idx is None:
+        return None
+    j = last_vowel_idx + 1
+    while j < len(decomposed) and unicodedata.combining(decomposed[j]):
+        if ord(decomposed[j]) in _ACCENT_MARK_CODEPOINTS:
+            return None  # already accented on the final vowel
+        j += 1
+    new_chars = decomposed[:last_vowel_idx+1] + '́' + decomposed[last_vowel_idx+1:]
+    return unicodedata.normalize('NFC', "".join(new_chars))
 
 CAPITAL_LETTER_RE = re.compile(r'^[A-Z]\.?$')
 ROMAN_NUM_RE = re.compile(r'^[IVXivx]+\.?$')
@@ -286,6 +315,33 @@ def get_preamble_children(entry, head_node):
         preamble_nodes.append(child)
     return preamble_nodes
 
+_GRAMMAR_TAGS = {'gen', 'itype', 'pos', 'gram', 'gramGrp'}
+
+def get_sense_leading_grammar_nodes(node):
+    """Direct children of a sense that appear before its first <i> tag -
+    LSJ's TEI convention always wraps the actual English definition gloss
+    in <i>, so header material (headword forms via <orth>, part of
+    speech/gender/dialect tags, connector words like "as") reliably
+    precedes it. This matters because some senses use a ':— Pass., ...'
+    marker to introduce a secondary usage partway through their own
+    content - a different voice for one sub-meaning, not a description of
+    the sense as a whole (e.g. ἐφάπτω's sense A: primarily active "bind on or
+    to...", with a passive sub-note on the perfect/pluperfect tucked in
+    after the colon-dash, many <i> glosses later). Hoisting a mid-sense tag
+    like that into the sense's own badge would misleadingly imply the
+    whole sense is in that voice. A genuinely sense-describing tag, like
+    ἄβατος's sense "b" ("as Subst., ἄβατον, τό, ..."), sits before that first <i>
+    even with a non-grammar tag (the repeated headword's own <orth>)
+    interspersed - only <i> and a nested <sense> stop the scan."""
+    leading = []
+    for child in node:
+        tag_local = child.tag.split('}')[-1]
+        if tag_local in ('sense', 'i'):
+            break
+        if tag_local in _GRAMMAR_TAGS:
+            leading.append(child)
+    return leading
+
 def _flatten_region(nodes):
     """Flatten a list of elements into themselves plus all descendants,
     without crossing into a nested <sense> - those are rendered as their
@@ -464,7 +520,7 @@ def parse_sense_node(node, depth=0, num_override=None):
     # just one numbered sense as a different part of speech) - the majority
     # of <pos>/<gramGrp> occurrences are here rather than in the entry
     # preamble, so they need their own extraction pass per sense.
-    sense_grammar_badges = render_sense_grammar_badges(extract_grammar_and_etymology(list(node)))
+    sense_grammar_badges = render_sense_grammar_badges(extract_grammar_and_etymology(get_sense_leading_grammar_nodes(node)))
 
     # Mark Roman numerals (depth 1) as major sense sections
     is_major = bool(depth == 1 and num_marker and ROMAN_NUM_RE.match(num_marker.strip()))
@@ -560,15 +616,30 @@ def build_unabridged_dictionary():
                 search_indices.add(normalize_grave_to_acute(raw_lemma))
                 search_indices.add(normalize_acute_to_grave(raw_lemma))
                 search_indices.add(strip_all_greek_accents(raw_lemma))
-                morph_cursor.execute("SELECT form, form_normalized, pos, tense, voice, mood, person, number, case_name FROM morphology WHERE lemma = ?", (lookup_lemma,))
+                enclitic_variant = add_enclitic_accent_variant(raw_lemma)
+                if enclitic_variant: search_indices.add(enclitic_variant)
+                morph_cursor.execute("SELECT form, form_normalized, pos, tense, voice, mood, person, number, case_name, degree, gender FROM morphology WHERE lemma = ?", (lookup_lemma,))
                 morph_rows = morph_cursor.fetchall()
-                
+
                 is_verb, is_noun_adj = False, False
-                noun_grid = defaultdict(lambda: defaultdict(set))
+                # Comparative/superlative adjective forms (e.g. φρονιμώτερα for
+                # φρόνιμος) share the same lemma, case, and number as the
+                # positive degree in Morpheus, and adjectives decline across
+                # three genders under that same lemma/case/number too - without
+                # splitting on `degree` and `gender`, they'd land in the same
+                # grid cell and render as an unreadable jumble of positive/
+                # comparative/superlative, masc/fem/neut forms all together.
+                # A plain noun has one fixed gender, so its grid ends up with
+                # only that one gender key - see write_declension_section,
+                # which only splits into per-gender tables when more than one
+                # gender is actually present.
+                noun_grid = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
+                comparative_grid = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
+                superlative_grid = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
                 verb_principal_parts = defaultdict(set)
-                
+
                 for mr in morph_rows:
-                    f_form, f_norm, pos, tense, voice, mood, person, number, case_name = mr
+                    f_form, f_norm, pos, tense, voice, mood, person, number, case_name, degree, gender = mr
                     if f_form:
                         f_clean = clean_text_for_apple(f_form)
                         search_indices.add(f_clean)
@@ -576,6 +647,8 @@ def build_unabridged_dictionary():
                         search_indices.add(normalize_grave_to_acute(f_clean))
                         search_indices.add(normalize_acute_to_grave(f_clean))
                         search_indices.add(strip_all_greek_accents(f_clean))
+                        enclitic_variant = add_enclitic_accent_variant(f_clean)
+                        if enclitic_variant: search_indices.add(enclitic_variant)
                     if f_norm:
                         n_clean = clean_text_for_apple(f_norm)
                         search_indices.add(n_clean)
@@ -583,6 +656,8 @@ def build_unabridged_dictionary():
                         search_indices.add(normalize_grave_to_acute(n_clean))
                         search_indices.add(normalize_acute_to_grave(n_clean))
                         search_indices.add(strip_all_greek_accents(n_clean))
+                        enclitic_variant = add_enclitic_accent_variant(n_clean)
+                        if enclitic_variant: search_indices.add(enclitic_variant)
                     
                     disp_form = html.escape(clean_text_for_apple(f_form))
                     if pos == 'verb':
@@ -599,7 +674,13 @@ def build_unabridged_dictionary():
                     elif pos in ('noun', 'adjective', 'article', 'pronoun'):
                         is_noun_adj = True
                         if case_name and number:
-                            noun_grid[case_name][number].add(disp_form)
+                            gender_key = gender or ''
+                            if degree == 'comparative':
+                                comparative_grid[case_name][number][gender_key].add(disp_form)
+                            elif degree == 'superlative':
+                                superlative_grid[case_name][number][gender_key].add(disp_form)
+                            else:
+                                noun_grid[case_name][number][gender_key].add(disp_form)
 
                 for keyword in search_indices:
                     clean_kw = sanitize_apple_key(keyword)
@@ -781,18 +862,60 @@ def build_unabridged_dictionary():
                 out_xml.write(f'{definitions_html}\n')
                 out_xml.write('        </div>\n')
 
-                if is_noun_adj and noun_grid:
-                    out_xml.write('        <div class="morph-section">\n')
-                    out_xml.write('            <p class="morph-label">Declension</p>\n')
-                    out_xml.write('            <table class="morphology-table">\n')
-                    out_xml.write('                <tr><th>Case</th><th>Singular</th><th>Dual</th><th>Plural</th></tr>\n')
-                    for c in ['nominative', 'genitive', 'dative', 'accusative', 'vocative']:
-                        sing = ", ".join(noun_grid[c].get('singular', ['\u2014']))
-                        dual = ", ".join(noun_grid[c].get('dual', ['\u2014']))
-                        plur = ", ".join(noun_grid[c].get('plural', ['\u2014']))
-                        out_xml.write(f'                <tr><td class="case-label">{c.capitalize()}</td><td>{sing}</td><td>{dual}</td><td>{plur}</td></tr>\n')
-                    out_xml.write('            </table>\n')
-                    out_xml.write('        </div>\n')
+                if is_noun_adj and (noun_grid or comparative_grid or superlative_grid):
+                    def write_declension_table(grid2d, label):
+                        out_xml.write('        <div class="morph-section">\n')
+                        out_xml.write(f'            <p class="morph-label">{label}</p>\n')
+                        out_xml.write('            <table class="morphology-table">\n')
+                        out_xml.write('                <tr><th>Case</th><th>Singular</th><th>Dual</th><th>Plural</th></tr>\n')
+                        for c in ['nominative', 'genitive', 'dative', 'accusative', 'vocative']:
+                            sing = ", ".join(grid2d[c].get('singular', ['\u2014']))
+                            dual = ", ".join(grid2d[c].get('dual', ['\u2014']))
+                            plur = ", ".join(grid2d[c].get('plural', ['\u2014']))
+                            out_xml.write(f'                <tr><td class="case-label">{c.capitalize()}</td><td>{sing}</td><td>{dual}</td><td>{plur}</td></tr>\n')
+                        out_xml.write('            </table>\n')
+                        out_xml.write('        </div>\n')
+
+                    def genders_in(grid3d):
+                        return {g for nums in grid3d.values() for genders in nums.values() for g in genders if g}
+
+                    def slice_gender(grid3d, gender):
+                        # Folds in ungendered ('') forms too - e.g. dual forms
+                        # are often gender-syncretic in Morpheus - so they show
+                        # up under every gender's table rather than being lost.
+                        sliced = defaultdict(lambda: defaultdict(set))
+                        for case, nums in grid3d.items():
+                            for num, genders in nums.items():
+                                forms = genders.get(gender, set()) | genders.get('', set())
+                                if forms:
+                                    sliced[case][num] = forms
+                        return sliced
+
+                    def write_declension_section(grid3d, label):
+                        genders = genders_in(grid3d)
+                        if len(genders) <= 1:
+                            # A plain noun (fixed gender) or a grid with no
+                            # gender data at all - collapse to the flat
+                            # case/number table as before, no gender split.
+                            flat = defaultdict(lambda: defaultdict(set))
+                            for case, nums in grid3d.items():
+                                for num, genders_dict in nums.items():
+                                    for forms in genders_dict.values():
+                                        flat[case][num] |= forms
+                            write_declension_table(flat, label)
+                        else:
+                            for g in ('masculine', 'feminine', 'neuter'):
+                                if g in genders:
+                                    sliced = slice_gender(grid3d, g)
+                                    if sliced:
+                                        write_declension_table(sliced, f'{label}, {g.capitalize()}')
+
+                    if noun_grid:
+                        write_declension_section(noun_grid, 'Declension')
+                    if comparative_grid:
+                        write_declension_section(comparative_grid, 'Declension (Comparative)')
+                    if superlative_grid:
+                        write_declension_section(superlative_grid, 'Declension (Superlative)')
 
                 elif is_verb and verb_principal_parts:
                     primary_parts = {k: v for k, v in verb_principal_parts.items() if k in PRINCIPAL_PARTS_PRIMARY}

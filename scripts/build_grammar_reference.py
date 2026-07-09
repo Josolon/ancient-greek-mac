@@ -30,7 +30,9 @@ GOODWIN_XML_PATH = 'data/goodwin.xml'
 OUTPUT_XML_PATH = 'src/GrammarReference.xml'
 WORD_INDEX_PATH = 'data/grammar_word_index.json'
 
-HEADING_TAGS = {'h2', 'h3', 'h4', 'h5', 'h6'}
+# h7 is not a native HTML tag, but Smyth's deepest-nested dialect/footnote
+# sub-paragraphs (e.g. "508 D") use it anyway - see SmythParser.
+HEADING_TAGS = {'h2', 'h3', 'h4', 'h5', 'h6', 'h7'}
 
 # --- Beta Code -> Unicode (Goodwin's TEI source is Beta Code; Smyth's HTML
 # derivative already ships proper Unicode, so this is only needed for Goodwin) ---
@@ -75,7 +77,9 @@ def clean_ws(text):
     return re.sub(r'\s+', ' ', text).strip()
 
 def strip_accents(text):
-    STRIP = {0x0300, 0x0301, 0x0302, 0x0304, 0x0306, 0x0308, 0x0313, 0x0314, 0x0345}
+    # Circumflex is 0342 (COMBINING GREEK PERISPOMENI), not 0302 (the generic/
+    # Latin combining circumflex) - see build_unabridged_xml.py's strip_all_greek_accents.
+    STRIP = {0x0300, 0x0301, 0x0304, 0x0306, 0x0308, 0x0313, 0x0314, 0x0342, 0x0345}
     decomposed = unicodedata.normalize('NFD', text)
     filtered = "".join(ch for ch in decomposed if ord(ch) not in STRIP)
     return unicodedata.normalize('NFC', filtered)
@@ -100,8 +104,10 @@ class SmythParser(HTMLParser):
         self.events = []
         self.div_depth = 0
         self.heading = None  # {'level': int, 'parts': []}
-        self.para = None  # {'num': int, 'parts': [], 'depth_at_open': int}
+        self.para = None  # {'num': int|None, 'parts': [], 'depth_at_open': int}
         self.suppress_heading = False  # True while inside an inner h4-h6 (the paragraph's own number label)
+        self.label_parts = None  # collects that inner label's text, to recover num when the id doesn't parse
+        self.last_num = 0  # last successfully resolved paragraph number, as a final fallback
 
     def handle_starttag(self, tag, attrs):
         attrs_dict = dict(attrs)
@@ -109,18 +115,29 @@ class SmythParser(HTMLParser):
             if self.para is not None:
                 # this is the paragraph's own number label (e.g. <h4>929</h4>) - not a real heading
                 self.suppress_heading = True
+                self.label_parts = []
             else:
                 self.heading = {'level': int(tag[1]), 'parts': []}
         elif tag == 'div':
             self.div_depth += 1
             if attrs_dict.get('class') == 'smythp' and self.para is None:
-                m = re.match(r's(\d+)', attrs_dict.get('id', ''))
-                self.para = {'num': int(m.group(1)) if m else 0, 'parts': [], 'depth_at_open': self.div_depth}
+                m = re.match(r's(\d+)$', attrs_dict.get('id', ''))
+                # Dialect/footnote sub-paragraphs (e.g. "500. 1. D", "503 D") use
+                # the full hierarchical div path as their id instead of "sNNN" -
+                # their number only shows up in the label text, recovered below
+                # when that label tag closes.
+                num = int(m.group(1)) if m else None
+                self.para = {'num': num, 'parts': [], 'depth_at_open': self.div_depth}
 
     def handle_endtag(self, tag):
         if tag in HEADING_TAGS:
             if self.suppress_heading:
                 self.suppress_heading = False
+                if self.para is not None and self.para['num'] is None:
+                    label_text = clean_ws("".join(self.label_parts or []))
+                    m = re.match(r'(\d+)', label_text)
+                    self.para['num'] = int(m.group(1)) if m else self.last_num
+                self.label_parts = None
             elif self.heading is not None:
                 text = clean_ws("".join(self.heading['parts']))
                 if text:
@@ -129,14 +146,25 @@ class SmythParser(HTMLParser):
         elif tag == 'div':
             if self.para is not None and self.div_depth == self.para['depth_at_open']:
                 text = clean_ws("".join(self.para['parts']))
+                if self.para['num'] is None:
+                    # No label tag at all resolved this - last resort: a leading
+                    # number in the body text itself, else just inherit the
+                    # previous real paragraph number rather than ever emitting
+                    # an unresolved/bogus one.
+                    m = re.match(r'(\d+)', text)
+                    self.para['num'] = int(m.group(1)) if m else self.last_num
                 self.events.append(('para', self.para['num'], text))
+                self.last_num = self.para['num']
                 self.para = None
             self.div_depth -= 1
 
     def handle_data(self, data):
-        if self.heading is not None and not self.suppress_heading:
+        if self.suppress_heading:
+            if self.label_parts is not None:
+                self.label_parts.append(data)
+        elif self.heading is not None:
             self.heading['parts'].append(data)
-        elif self.para is not None and not self.suppress_heading:
+        elif self.para is not None:
             self.para['parts'].append(data)
 
 
