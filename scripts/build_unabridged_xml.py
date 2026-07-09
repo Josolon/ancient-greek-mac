@@ -6,6 +6,7 @@ import re
 import xml.etree.ElementTree as ET
 import unicodedata
 from collections import defaultdict
+from urllib.parse import quote as url_quote
 
 # --- Paths ---
 TEI_XML_DIR = 'data/lsj_unicode/'
@@ -494,6 +495,14 @@ def pick_canonical_form(grid3d, gender_preference=_GENDER_PREFERENCE):
                     return sorted(forms)[0]
     return None
 
+def dict_link_href(word):
+    """x-dictionary:link: internal cross-reference URI. The word must be
+    percent-encoded - Greek text passed through raw makes macOS's URI parser
+    choke and silently fall back to looking up the literal scheme-specific
+    part ("link") in whatever dictionary is currently frontmost, instead of
+    following the link at all."""
+    return 'x-dictionary:link:' + url_quote(word, safe='')
+
 def render_degree_forms_html(positive_disp, comparative_form, superlative_form):
     """Compact 'Positive / Comparative / Superlative' summary line shown on
     the positive-degree entry, masculine citation forms only, with the
@@ -504,9 +513,9 @@ def render_degree_forms_html(positive_disp, comparative_form, superlative_form):
         return ""
     parts = [f'<span class="degree-form"><span class="degree-label">Positive:</span> <b class="gk-word">{html.escape(positive_disp)}</b></span>']
     if comparative_form:
-        parts.append(f'<span class="degree-form"><span class="degree-label">Comparative:</span> <a class="gk-word" href="x-dictionary:link:{html.escape(comparative_form)}">{html.escape(comparative_form)}</a></span>')
+        parts.append(f'<span class="degree-form"><span class="degree-label">Comparative:</span> <a class="gk-word" href="{dict_link_href(comparative_form)}">{html.escape(comparative_form)}</a></span>')
     if superlative_form:
-        parts.append(f'<span class="degree-form"><span class="degree-label">Superlative:</span> <a class="gk-word" href="x-dictionary:link:{html.escape(superlative_form)}">{html.escape(superlative_form)}</a></span>')
+        parts.append(f'<span class="degree-form"><span class="degree-label">Superlative:</span> <a class="gk-word" href="{dict_link_href(superlative_form)}">{html.escape(superlative_form)}</a></span>')
     return '        <div class="entry-degree-forms">' + "  ·  ".join(parts) + '</div>\n'
 
 def parse_sense_node(node, depth=0, num_override=None):
@@ -1027,7 +1036,7 @@ def build_unabridged_dictionary():
                         out_xml.write(f'        <h1 class="entry-lemma">{html.escape(citation)}</h1>\n')
                         out_xml.write(
                             f'        <div class="entry-preamble">{degree_label} degree of '
-                            f'<a class="gk-word" href="x-dictionary:link:{html.escape(raw_lemma)}">{html.escape(raw_lemma)}</a></div>\n'
+                            f'<a class="gk-word" href="{dict_link_href(raw_lemma)}">{html.escape(raw_lemma)}</a></div>\n'
                         )
                         write_declension_section(grid, 'Declension')
                         out_xml.write('    </d:entry>\n\n')
