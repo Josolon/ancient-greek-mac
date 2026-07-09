@@ -182,16 +182,6 @@ span.degree-label {
     margin-right: 2px;
 }
 
-div.entry-degree-forms a.gk-word {
-    color: #002266;
-    text-decoration: none;
-    border-bottom: 1px dotted #8b9cc4;
-}
-
-div.entry-degree-forms a.gk-word:hover {
-    border-bottom-style: solid;
-}
-
 /* --- Etymology (LSJ's bare "derived from X" cross-reference) --- */
 div.entry-etymology {
     margin: 2px 0 8px 0;
