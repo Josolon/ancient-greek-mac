@@ -92,22 +92,50 @@ def natural_smyth_key(path):
 
 # --- Smyth: HTML parsing ---
 
+# Inline tags encountered inside a paragraph that are worth preserving in the
+# rendered output, mapped to the (open, close) markup we emit instead of the
+# source's own tag/attributes. Everything else (id-only spans, <a> links,
+# layout-only divs, meta/nav cruft) is transparent: its content still comes
+# through via handle_data, just without a wrapper.
+_PARA_TAG_MARKUP = {
+    'b': ('<b>', '</b>'),
+    'i': ('<i>', '</i>'),
+    'table': ('<table class="grammar-table"><tbody>', '</tbody></table>'),
+    'tr': ('<tr>', '</tr>'),
+    'td': ('<td>', '</td>'),
+}
+
+def render_para_parts(parts):
+    """Joins a paragraph's (kind, text) parts into one HTML string - 'text'
+    parts get escaped, 'html' parts (our own inserted markup) don't - then
+    collapses whitespace runs the way clean_ws does for plain text. Safe to
+    collapse globally because none of the markup we insert contains internal
+    multi-space runs."""
+    buf = [html_lib.escape(val) if kind == 'text' else val for kind, val in parts]
+    return re.sub(r'\s+', ' ', "".join(buf)).strip()
+
+def plain_text_of_parts(parts):
+    return clean_ws("".join(val for kind, val in parts if kind == 'text'))
+
+
 class SmythParser(HTMLParser):
     """Walks a chapter file's HTML in document order, emitting a flat event
-    list of ('heading', level, text) and ('para', num, text). Paragraph text
-    is flattened to plain text (dropping inline styling) - a deliberate v1
-    simplification; the citation/index metadata is the valuable part here,
-    not rich inline typography like LSJ's own entries have."""
+    list of ('heading', level, text) and ('para', num, html). Paragraph
+    content keeps a whitelisted set of inline tags (Greek word spans, glosses,
+    embedded paradigm tables, bold/italic) so long grammar discussions render
+    with real structure instead of one flattened wall of text."""
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.events = []
         self.div_depth = 0
         self.heading = None  # {'level': int, 'parts': []}
-        self.para = None  # {'num': int|None, 'parts': [], 'depth_at_open': int}
+        self.para = None  # {'num': int|None, 'parts': [(kind, str)], 'depth_at_open': int}
         self.suppress_heading = False  # True while inside an inner h4-h6 (the paragraph's own number label)
         self.label_parts = None  # collects that inner label's text, to recover num when the id doesn't parse
         self.last_num = 0  # last successfully resolved paragraph number, as a final fallback
+        self.tag_stack = []  # [(tag, close_markup_or_None)] - tracks what to emit on the matching end tag
+        self.foreign_depth = 0  # >0 inside a <span class="foreign"> - suppresses the source's own redundant nested <b>
 
     def handle_starttag(self, tag, attrs):
         attrs_dict = dict(attrs)
@@ -118,7 +146,8 @@ class SmythParser(HTMLParser):
                 self.label_parts = []
             else:
                 self.heading = {'level': int(tag[1]), 'parts': []}
-        elif tag == 'div':
+            return
+        if tag == 'div':
             self.div_depth += 1
             if attrs_dict.get('class') == 'smythp' and self.para is None:
                 m = re.match(r's(\d+)$', attrs_dict.get('id', ''))
@@ -128,6 +157,34 @@ class SmythParser(HTMLParser):
                 # when that label tag closes.
                 num = int(m.group(1)) if m else None
                 self.para = {'num': num, 'parts': [], 'depth_at_open': self.div_depth}
+            elif self.para is not None:
+                self.tag_stack.append(('div', None))
+            return
+        if self.para is None:
+            return
+        if tag == 'span' and attrs_dict.get('class') == 'foreign':
+            self.para['parts'].append(('html', '<b class="gk-word">'))
+            self.tag_stack.append((tag, '</b>'))
+            self.foreign_depth += 1
+        elif tag == 'span' and attrs_dict.get('class') == 'gloss':
+            self.para['parts'].append(('html', '<i class="grammar-gloss">'))
+            self.tag_stack.append((tag, '</i>'))
+        elif tag == 'br':
+            self.para['parts'].append(('html', '<br/>'))
+            self.tag_stack.append((tag, None))
+        elif tag == 'b' and self.foreign_depth > 0:
+            # the source often double-marks a Greek word - <span
+            # class="foreign"><b>...</b></span> - already bold via gk-word,
+            # so treat this inner <b> as transparent rather than nesting
+            self.tag_stack.append((tag, None))
+        elif tag in _PARA_TAG_MARKUP:
+            open_markup, close_markup = _PARA_TAG_MARKUP[tag]
+            self.para['parts'].append(('html', open_markup))
+            self.tag_stack.append((tag, close_markup))
+        else:
+            # transparent wrapper (id-only span, <a>, <p>, ...): its own text
+            # still comes through via handle_data, just unstyled
+            self.tag_stack.append((tag, None))
 
     def handle_endtag(self, tag):
         if tag in HEADING_TAGS:
@@ -143,20 +200,33 @@ class SmythParser(HTMLParser):
                 if text:
                     self.events.append(('heading', self.heading['level'], text))
                 self.heading = None
-        elif tag == 'div':
+            return
+        if tag == 'div':
             if self.para is not None and self.div_depth == self.para['depth_at_open']:
-                text = clean_ws("".join(self.para['parts']))
                 if self.para['num'] is None:
                     # No label tag at all resolved this - last resort: a leading
-                    # number in the body text itself, else just inherit the
+                    # number in the paragraph's own text, else just inherit the
                     # previous real paragraph number rather than ever emitting
                     # an unresolved/bogus one.
-                    m = re.match(r'(\d+)', text)
+                    m = re.match(r'(\d+)', plain_text_of_parts(self.para['parts']))
                     self.para['num'] = int(m.group(1)) if m else self.last_num
-                self.events.append(('para', self.para['num'], text))
+                html_frag = render_para_parts(self.para['parts'])
+                if html_frag:
+                    self.events.append(('para', self.para['num'], html_frag))
                 self.last_num = self.para['num']
                 self.para = None
+            elif self.tag_stack and self.tag_stack[-1][0] == 'div':
+                self.tag_stack.pop()
             self.div_depth -= 1
+            return
+        if self.para is None:
+            return
+        if self.tag_stack and self.tag_stack[-1][0] == tag:
+            _, close_markup = self.tag_stack.pop()
+            if close_markup:
+                self.para['parts'].append(('html', close_markup))
+            if tag == 'span' and close_markup == '</b>':
+                self.foreign_depth -= 1
 
     def handle_data(self, data):
         if self.suppress_heading:
@@ -165,30 +235,31 @@ class SmythParser(HTMLParser):
         elif self.heading is not None:
             self.heading['parts'].append(data)
         elif self.para is not None:
-            self.para['parts'].append(data)
+            self.para['parts'].append(('text', data))
 
 
 def group_events_into_topics(events, fallback_heading, source):
     """Groups a flat (heading|para) event stream into topic entries: every
     heading starts a new topic; paragraphs before the first heading in a
-    file fall under that file's own top-level title."""
+    file fall under that file's own top-level title. Each topic keeps its
+    paragraphs as separate (num, html) pairs rather than one joined blob, so
+    they can be rendered as distinct, numbered, spaced-out blocks."""
     topics = []
-    current = {'heading': fallback_heading, 'nums': [], 'text_parts': []}
+    current = {'heading': fallback_heading, 'nums': [], 'paras': []}
     for kind, a, b in events:
         if kind == 'heading':
             if current['nums']:
                 topics.append(current)
-            current = {'heading': b, 'nums': [], 'text_parts': []}
+            current = {'heading': b, 'nums': [], 'paras': []}
         else:
-            num, text = a, b
+            num, html_frag = a, b
             current['nums'].append(num)
-            if text:
-                current['text_parts'].append(text)
+            if html_frag:
+                current['paras'].append((num, html_frag))
     if current['nums']:
         topics.append(current)
     for t in topics:
         t['source'] = source
-        t['body'] = " ".join(t['text_parts'])
     return topics
 
 def extract_foreign_word_index_from_html(content, source_name):
@@ -233,20 +304,22 @@ def parse_smyth():
 
 # --- Goodwin: TEI XML parsing (Beta Code) ---
 
-def _flatten_with_beta_conversion(el):
-    """Flattens an element's text content, converting any <foreign> tag's
-    Beta Code to Unicode at whatever depth it appears (not just direct
-    children) - the rest of the tree is plain English prose."""
+def _render_para_html(el):
+    """Renders an element's content to safe HTML: plain English text is
+    escaped, and any <foreign> tag's Beta Code is converted to Unicode Greek
+    and wrapped for styling - at whatever depth it appears, not just direct
+    children."""
     parts = []
     if el.text:
-        parts.append(el.text)
+        parts.append(html_lib.escape(el.text))
     for child in el:
         if child.tag.split('}')[-1] == 'foreign':
-            parts.append(beta_to_unicode("".join(child.itertext())))
+            greek = beta_to_unicode("".join(child.itertext()))
+            parts.append(f'<b class="gk-word">{html_lib.escape(greek)}</b>')
         else:
-            parts.append(_flatten_with_beta_conversion(child))
+            parts.append(_render_para_html(child))
         if child.tail:
-            parts.append(child.tail)
+            parts.append(html_lib.escape(child.tail))
     return "".join(parts)
 
 def parse_goodwin():
@@ -259,13 +332,12 @@ def parse_goodwin():
     if body is None:
         return topics, word_index
 
-    current = {'heading': 'Goodwin', 'nums': [], 'text_parts': []}
+    current = {'heading': 'Goodwin', 'nums': [], 'paras': []}
     current_num = 0
 
     def flush():
         if current['nums']:
             current['source'] = 'Goodwin'
-            current['body'] = " ".join(current['text_parts'])
             topics.append(dict(current))
 
     for el in body.iter():
@@ -275,14 +347,14 @@ def parse_goodwin():
             # Headings are plain English (no embedded Greek here) - unlike
             # <p> body text, don't run this through beta_to_unicode.
             text = clean_ws("".join(el.itertext()))
-            current = {'heading': text, 'nums': [], 'text_parts': []}
+            current = {'heading': text, 'nums': [], 'paras': []}
         elif tag == 'milestone' and el.attrib.get('unit') == 'smythp':
             current_num = int(el.attrib.get('n', current_num))
             current['nums'].append(current_num)
         elif tag == 'p':
-            text = clean_ws(_flatten_with_beta_conversion(el))
-            if text:
-                current['text_parts'].append(text)
+            html_frag = re.sub(r'\s+', ' ', _render_para_html(el)).strip()
+            if re.sub(r'<[^>]+>', '', html_frag).strip():
+                current['paras'].append((current_num, html_frag))
         elif tag == 'foreign':
             word = beta_to_unicode("".join(el.itertext())).strip()
             if word and ' ' not in word and 1 < len(word) <= 20:
@@ -348,7 +420,16 @@ def build_grammar_reference_dictionary():
             out.write(f'        <h1 class="grammar-heading">{html_lib.escape(title.title())}</h1>\n')
             prefix = 'S' if t['source'] == 'Smyth' else 'G'
             out.write(f'        <div class="grammar-citation">{t["source"]} §{html_lib.escape(citation_range(t["nums"]))}</div>\n')
-            out.write(f'        <div class="grammar-body">{html_lib.escape(t["body"])}</div>\n')
+            # Every paragraph gets its own numbered, spaced-out block rather
+            # than being joined into one wall of text - the source's own
+            # section numbers (e.g. "768.") act as signposts through a long
+            # multi-paragraph discussion like an irregular verb's full paradigm.
+            multi_para = len(t['paras']) > 1
+            for num, html_frag in t['paras']:
+                out.write('        <div class="grammar-para">')
+                if multi_para:
+                    out.write(f'<span class="para-num">{prefix}. {num}</span> ')
+                out.write(f'{html_frag}</div>\n')
             out.write('    </d:entry>\n\n')
         out.write('</d:dictionary>\n')
     print(f"🎉 Wrote {len(all_topics)} grammar reference entries to {OUTPUT_XML_PATH}")
