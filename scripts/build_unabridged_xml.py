@@ -474,6 +474,41 @@ def render_grammar_crossref_html(refs):
         return ""
     return f'        <div class="entry-grammar-crossref"><span class="etym-label">Grammar &amp; Syntax:</span> {"; ".join(parts)}</div>\n'
 
+_CASE_ORDER = ('nominative', 'genitive', 'dative', 'accusative', 'vocative')
+_NUMBER_ORDER = ('singular', 'plural', 'dual')
+_GENDER_PREFERENCE = ('masculine', '', 'feminine', 'neuter')
+
+def pick_canonical_form(grid3d, gender_preference=_GENDER_PREFERENCE):
+    """Picks one representative display form out of a case/number/gender
+    declension grid - preferring nominative singular in the given gender
+    order (masculine first, by default, since that's the citation form
+    convention), then falling back to any populated cell at all."""
+    for gender in gender_preference:
+        forms = grid3d.get('nominative', {}).get('singular', {}).get(gender)
+        if forms:
+            return sorted(forms)[0]
+    for case in _CASE_ORDER:
+        for number in _NUMBER_ORDER:
+            for forms in grid3d.get(case, {}).get(number, {}).values():
+                if forms:
+                    return sorted(forms)[0]
+    return None
+
+def render_degree_forms_html(positive_disp, comparative_form, superlative_form):
+    """Compact 'Positive / Comparative / Superlative' summary line shown on
+    the positive-degree entry, masculine citation forms only, with the
+    comparative/superlative each linking to their own synthetic entry (see
+    write_synthetic_degree_entry) rather than repeating full declension
+    tables for all three degrees on this one page."""
+    if not comparative_form and not superlative_form:
+        return ""
+    parts = [f'<span class="degree-form"><span class="degree-label">Positive:</span> <b class="gk-word">{html.escape(positive_disp)}</b></span>']
+    if comparative_form:
+        parts.append(f'<span class="degree-form"><span class="degree-label">Comparative:</span> <a class="gk-word" href="x-dictionary:link:{html.escape(comparative_form)}">{html.escape(comparative_form)}</a></span>')
+    if superlative_form:
+        parts.append(f'<span class="degree-form"><span class="degree-label">Superlative:</span> <a class="gk-word" href="x-dictionary:link:{html.escape(superlative_form)}">{html.escape(superlative_form)}</a></span>')
+    return '        <div class="entry-degree-forms">' + "  ·  ".join(parts) + '</div>\n'
+
 def parse_sense_node(node, depth=0, num_override=None):
     """
     Recursively processes mixed-content TEI sense blocks, translating
@@ -637,28 +672,42 @@ def build_unabridged_dictionary():
                 comparative_grid = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
                 superlative_grid = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
                 verb_principal_parts = defaultdict(set)
+                # Comparative/superlative forms get their own synthetic entry
+                # (see write_synthetic_degree_entry below) rather than being
+                # searchable from the positive entry too - so their raw forms
+                # are collected separately, not folded into search_indices.
+                comparative_raw_forms = set()
+                superlative_raw_forms = set()
 
                 for mr in morph_rows:
                     f_form, f_norm, pos, tense, voice, mood, person, number, case_name, degree, gender = mr
+                    degree_bucket = None
+                    if pos in ('noun', 'adjective', 'article', 'pronoun'):
+                        if degree == 'comparative':
+                            degree_bucket = comparative_raw_forms
+                        elif degree == 'superlative':
+                            degree_bucket = superlative_raw_forms
+                    target_indices = degree_bucket if degree_bucket is not None else search_indices
+
                     if f_form:
                         f_clean = clean_text_for_apple(f_form)
-                        search_indices.add(f_clean)
-                        search_indices.add(strip_greek_vowel_lengths(f_clean))
-                        search_indices.add(normalize_grave_to_acute(f_clean))
-                        search_indices.add(normalize_acute_to_grave(f_clean))
-                        search_indices.add(strip_all_greek_accents(f_clean))
+                        target_indices.add(f_clean)
+                        target_indices.add(strip_greek_vowel_lengths(f_clean))
+                        target_indices.add(normalize_grave_to_acute(f_clean))
+                        target_indices.add(normalize_acute_to_grave(f_clean))
+                        target_indices.add(strip_all_greek_accents(f_clean))
                         enclitic_variant = add_enclitic_accent_variant(f_clean)
-                        if enclitic_variant: search_indices.add(enclitic_variant)
+                        if enclitic_variant: target_indices.add(enclitic_variant)
                     if f_norm:
                         n_clean = clean_text_for_apple(f_norm)
-                        search_indices.add(n_clean)
-                        search_indices.add(strip_greek_vowel_lengths(n_clean))
-                        search_indices.add(normalize_grave_to_acute(n_clean))
-                        search_indices.add(normalize_acute_to_grave(n_clean))
-                        search_indices.add(strip_all_greek_accents(n_clean))
+                        target_indices.add(n_clean)
+                        target_indices.add(strip_greek_vowel_lengths(n_clean))
+                        target_indices.add(normalize_grave_to_acute(n_clean))
+                        target_indices.add(normalize_acute_to_grave(n_clean))
+                        target_indices.add(strip_all_greek_accents(n_clean))
                         enclitic_variant = add_enclitic_accent_variant(n_clean)
-                        if enclitic_variant: search_indices.add(enclitic_variant)
-                    
+                        if enclitic_variant: target_indices.add(enclitic_variant)
+
                     disp_form = html.escape(clean_text_for_apple(f_form))
                     if pos == 'verb':
                         is_verb = True
@@ -862,56 +911,74 @@ def build_unabridged_dictionary():
                 out_xml.write(f'{definitions_html}\n')
                 out_xml.write('        </div>\n')
 
-                if is_noun_adj and (noun_grid or comparative_grid or superlative_grid):
-                    def write_declension_table(grid2d, label):
-                        out_xml.write('        <div class="morph-section">\n')
-                        out_xml.write(f'            <p class="morph-label">{label}</p>\n')
-                        out_xml.write('            <table class="morphology-table">\n')
-                        out_xml.write('                <tr><th>Case</th><th>Singular</th><th>Dual</th><th>Plural</th></tr>\n')
-                        for c in ['nominative', 'genitive', 'dative', 'accusative', 'vocative']:
-                            sing = ", ".join(grid2d[c].get('singular', ['\u2014']))
-                            dual = ", ".join(grid2d[c].get('dual', ['\u2014']))
-                            plur = ", ".join(grid2d[c].get('plural', ['\u2014']))
-                            out_xml.write(f'                <tr><td class="case-label">{c.capitalize()}</td><td>{sing}</td><td>{dual}</td><td>{plur}</td></tr>\n')
-                        out_xml.write('            </table>\n')
-                        out_xml.write('        </div>\n')
+                # Defined unconditionally (not just under the noun/adj branch
+                # below) so the synthetic comparative/superlative entries
+                # written after this entry closes can reuse the same table
+                # renderer.
+                def write_declension_table(grid2d, label):
+                    out_xml.write('        <div class="morph-section">\n')
+                    out_xml.write(f'            <p class="morph-label">{label}</p>\n')
+                    out_xml.write('            <table class="morphology-table">\n')
+                    out_xml.write('                <tr><th>Case</th><th>Singular</th><th>Dual</th><th>Plural</th></tr>\n')
+                    for c in ['nominative', 'genitive', 'dative', 'accusative', 'vocative']:
+                        sing = ", ".join(grid2d[c].get('singular', ['\u2014']))
+                        dual = ", ".join(grid2d[c].get('dual', ['\u2014']))
+                        plur = ", ".join(grid2d[c].get('plural', ['\u2014']))
+                        out_xml.write(f'                <tr><td class="case-label">{c.capitalize()}</td><td>{sing}</td><td>{dual}</td><td>{plur}</td></tr>\n')
+                    out_xml.write('            </table>\n')
+                    out_xml.write('        </div>\n')
 
-                    def genders_in(grid3d):
-                        return {g for nums in grid3d.values() for genders in nums.values() for g in genders if g}
+                def genders_in(grid3d):
+                    return {g for nums in grid3d.values() for genders in nums.values() for g in genders if g}
 
-                    def slice_gender(grid3d, gender):
-                        # Folds in ungendered ('') forms too - e.g. dual forms
-                        # are often gender-syncretic in Morpheus - so they show
-                        # up under every gender's table rather than being lost.
-                        sliced = defaultdict(lambda: defaultdict(set))
+                def slice_gender(grid3d, gender):
+                    # Folds in ungendered ('') forms too - e.g. dual forms
+                    # are often gender-syncretic in Morpheus - so they show
+                    # up under every gender's table rather than being lost.
+                    sliced = defaultdict(lambda: defaultdict(set))
+                    for case, nums in grid3d.items():
+                        for num, genders in nums.items():
+                            forms = genders.get(gender, set()) | genders.get('', set())
+                            if forms:
+                                sliced[case][num] = forms
+                    return sliced
+
+                def write_declension_section(grid3d, label):
+                    genders = genders_in(grid3d)
+                    if len(genders) <= 1:
+                        # A plain noun (fixed gender) or a grid with no
+                        # gender data at all - collapse to the flat
+                        # case/number table as before, no gender split.
+                        flat = defaultdict(lambda: defaultdict(set))
                         for case, nums in grid3d.items():
-                            for num, genders in nums.items():
-                                forms = genders.get(gender, set()) | genders.get('', set())
-                                if forms:
-                                    sliced[case][num] = forms
-                        return sliced
+                            for num, genders_dict in nums.items():
+                                for forms in genders_dict.values():
+                                    flat[case][num] |= forms
+                        write_declension_table(flat, label)
+                    else:
+                        for g in ('masculine', 'feminine', 'neuter'):
+                            if g in genders:
+                                sliced = slice_gender(grid3d, g)
+                                if sliced:
+                                    write_declension_table(sliced, f'{label}, {g.capitalize()}')
 
-                    def write_declension_section(grid3d, label):
-                        genders = genders_in(grid3d)
-                        if len(genders) <= 1:
-                            # A plain noun (fixed gender) or a grid with no
-                            # gender data at all - collapse to the flat
-                            # case/number table as before, no gender split.
-                            flat = defaultdict(lambda: defaultdict(set))
-                            for case, nums in grid3d.items():
-                                for num, genders_dict in nums.items():
-                                    for forms in genders_dict.values():
-                                        flat[case][num] |= forms
-                            write_declension_table(flat, label)
-                        else:
-                            for g in ('masculine', 'feminine', 'neuter'):
-                                if g in genders:
-                                    sliced = slice_gender(grid3d, g)
-                                    if sliced:
-                                        write_declension_table(sliced, f'{label}, {g.capitalize()}')
+                # Canonical (masculine-preferred) citation forms for the
+                # compact Positive/Comparative/Superlative summary line -
+                # comparative/superlative each get their own focused
+                # synthetic entry (below) rather than a full declension
+                # table repeated on this positive-degree entry too.
+                comparative_citation = pick_canonical_form(comparative_grid) if comparative_grid else None
+                superlative_citation = pick_canonical_form(superlative_grid) if superlative_grid else None
 
-                    if noun_grid:
-                        write_declension_section(noun_grid, 'Declension')
+                if is_noun_adj and noun_grid:
+                    out_xml.write(render_degree_forms_html(raw_lemma, comparative_citation, superlative_citation))
+                    write_declension_section(noun_grid, 'Declension')
+
+                elif is_noun_adj and (comparative_grid or superlative_grid):
+                    # Rare: this lemma has no positive-degree forms of its own
+                    # in Morpheus (its headword already IS a comparative or
+                    # superlative, e.g. a suppletive form) - show what we have
+                    # directly rather than splitting off a synthetic entry.
                     if comparative_grid:
                         write_declension_section(comparative_grid, 'Declension (Comparative)')
                     if superlative_grid:
@@ -935,7 +1002,36 @@ def build_unabridged_dictionary():
                     out_xml.write('        </div>\n')
 
                 out_xml.write('    </d:entry>\n\n')
-                
+
+                # A comparative/superlative degree gets its own focused entry
+                # (rather than a third full declension table crammed onto the
+                # positive entry) - titled by its own citation form, indexed
+                # by all its own attested forms, with a back-link to the
+                # positive headword it belongs to.
+                if is_noun_adj and noun_grid:
+                    for grid, citation, degree_label, raw_forms in (
+                        (comparative_grid, comparative_citation, 'Comparative', comparative_raw_forms),
+                        (superlative_grid, superlative_citation, 'Superlative', superlative_raw_forms),
+                    ):
+                        if not grid or not citation:
+                            continue
+                        syn_lookup_lemma = strip_greek_vowel_lengths(citation)
+                        syn_safe_title = sanitize_apple_key(syn_lookup_lemma) or "unknown"
+                        entry_counter += 1
+                        syn_entry_id = f"lsj_entry_{entry_counter}"
+                        out_xml.write(f'    <d:entry id="{syn_entry_id}" d:title="{html.escape(syn_safe_title)}">\n')
+                        for keyword in raw_forms:
+                            clean_kw = sanitize_apple_key(keyword)
+                            if clean_kw:
+                                out_xml.write(f'        <d:index d:value="{html.escape(clean_kw)}"/>\n')
+                        out_xml.write(f'        <h1 class="entry-lemma">{html.escape(citation)}</h1>\n')
+                        out_xml.write(
+                            f'        <div class="entry-preamble">{degree_label} degree of '
+                            f'<a class="gk-word" href="x-dictionary:link:{html.escape(raw_lemma)}">{html.escape(raw_lemma)}</a></div>\n'
+                        )
+                        write_declension_section(grid, 'Declension')
+                        out_xml.write('    </d:entry>\n\n')
+
             print(f"📖 Segment [{file_idx+1}/{len(xml_files)}]: {os.path.basename(xml_path)} -> Cumulative entries written: {entry_counter}")
 
         out_xml.write('</d:dictionary>\n')
