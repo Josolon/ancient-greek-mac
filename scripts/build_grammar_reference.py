@@ -21,6 +21,7 @@ import json
 import os
 import re
 import unicodedata
+import urllib.parse
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from html.parser import HTMLParser
@@ -29,6 +30,9 @@ SMYTH_HTML_DIR = 'data/smyth_html/'
 GOODWIN_XML_PATH = 'data/goodwin.xml'
 OUTPUT_XML_PATH = 'src/GrammarReference.xml'
 WORD_INDEX_PATH = 'data/grammar_word_index.json'
+# Must match src/GrammarReference.plist's CFBundleIdentifier and the copy of
+# this same constant in build_unabridged_xml.py.
+GRAMMAR_DICT_BUNDLE_ID = 'com.jonatansolon.dictionary.GreekGrammarReference'
 
 # h7 is not a native HTML tag, but Smyth's deepest-nested dialect/footnote
 # sub-paragraphs (e.g. "508 D") use it anyway - see SmythParser.
@@ -110,9 +114,21 @@ def render_para_parts(parts):
     parts get escaped, 'html' parts (our own inserted markup) don't - then
     collapses whitespace runs the way clean_ws does for plain text. Safe to
     collapse globally because none of the markup we insert contains internal
-    multi-space runs."""
+    multi-space runs.
+
+    A source line break used only for HTML readability (e.g. a newline
+    between a Greek word's closing </span> and the next <span class="gloss">)
+    collapses to a single plain space here - but Apple's build_dict.sh then
+    treats that lone space as an insignificant whitespace-only text node
+    (standard XML/XSLT behavior, since a bare ' ' between two tags looks
+    identical to pretty-printing indentation) and silently drops it, gluing
+    the Greek word straight onto its English gloss with no space at all. A
+    literal U+00A0 in its place isn't XML whitespace, so it survives - this
+    only ever fires exactly where a tag-to-tag gap held nothing but
+    whitespace to begin with, never inside a real running sentence."""
     buf = [html_lib.escape(val) if kind == 'text' else val for kind, val in parts]
-    return re.sub(r'\s+', ' ', "".join(buf)).strip()
+    joined = re.sub(r'\s+', ' ', "".join(buf)).strip()
+    return re.sub(r'> <', '> <', joined)
 
 def plain_text_of_parts(parts):
     return clean_ws("".join(val for kind, val in parts if kind == 'text'))
@@ -378,6 +394,43 @@ def citation_terms(source, nums):
         terms.add(f'{full} {n}')
     return terms
 
+# --- In-prose cross-reference links ---
+
+# Smyth and Goodwin both cross-reference their own other paragraphs with a
+# bare section number after "see", "see also", or "cf." (e.g. "see 348",
+# "cf. 2420") rather than any markup - so this is a plain-text convention we
+# have to recognize, not something already tagged in the source. The clause
+# capture stops at '<' so it never reaches into a following tag's markup.
+_CROSSREF_CLAUSE_RE = re.compile(r'\b(see also|see|cf\.)(\s+)([^<>.;)\n]*?)(?=[.;)<\n]|$)')
+_CROSSREF_NUM_RE = re.compile(r'\b\d+\b')
+
+def linkify_crossrefs(html_frag, prefix, valid_nums):
+    """Turns bare-number cross-references after 'see'/'see also'/'cf.' into
+    x-dictionary:d: links to that paragraph's own entry in this same
+    dictionary. Only numbers that are themselves indexed paragraph numbers
+    elsewhere in the same grammar (valid_nums) get linked, so a stray count
+    or footnote digit that happens to follow 'see' doesn't turn into a dead
+    link."""
+    def link_number(m):
+        n = m.group(0)
+        if int(n) not in valid_nums:
+            return n
+        term = f'{prefix}. {n}'
+        href = f'x-dictionary:d:{urllib.parse.quote(term)}:{GRAMMAR_DICT_BUNDLE_ID}'
+        return f'<a href="{href}">{n}</a>'
+
+    def link_clause(m):
+        keyword, space, clause = m.group(1), m.group(2), m.group(3)
+        return f'{keyword}{space}{_CROSSREF_NUM_RE.sub(link_number, clause)}'
+
+    return _CROSSREF_CLAUSE_RE.sub(link_clause, html_frag)
+
+def valid_paragraph_numbers(topics):
+    nums = set()
+    for t in topics:
+        nums.update(t['nums'])
+    return nums
+
 def citation_range(nums):
     if not nums:
         return ""
@@ -395,6 +448,10 @@ def build_grammar_reference_dictionary():
     print(f"   {len(goodwin_topics)} topic entries, {len(goodwin_words)} indexed words")
 
     all_topics = smyth_topics + goodwin_topics
+    valid_nums_by_source = {
+        'Smyth': valid_paragraph_numbers(smyth_topics),
+        'Goodwin': valid_paragraph_numbers(goodwin_topics),
+    }
 
     with open(OUTPUT_XML_PATH, 'w', encoding='utf-8') as out:
         out.write('<?xml version="1.0" encoding="UTF-8"?>\n')
@@ -425,7 +482,9 @@ def build_grammar_reference_dictionary():
             # section numbers (e.g. "768.") act as signposts through a long
             # multi-paragraph discussion like an irregular verb's full paradigm.
             multi_para = len(t['paras']) > 1
+            valid_nums = valid_nums_by_source[t['source']]
             for num, html_frag in t['paras']:
+                html_frag = linkify_crossrefs(html_frag, prefix, valid_nums)
                 out.write('        <div class="grammar-para">')
                 if multi_para:
                     out.write(f'<span class="para-num">{prefix}. {num}</span> ')

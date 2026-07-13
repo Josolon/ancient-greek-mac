@@ -4,20 +4,19 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
+	<key>CFBundleDisplayName</key>
+	<string>Greek</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.jonatansolon.dictionary.AncientGreek</string>
 	<key>CFBundleName</key>
-	<string>Ancient Greek</string>
-	<key>CFBundleDisplayName</key>
-	<string>Ancient Greek (LSJ)</string>
+	<string>Greek</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
 	<key>DCSDictionaryCopyright</key>
 	<string>LSJ data: Liddell–Scott–Jones (Helma Dik/Logeion, Perseus Tufts). Curated by Jónatan Sólon.</string>
-	<key>DCSDictionaryManufacturerName</key>
-	<string>Jónatan Sólon</string>
 	<key>DCSDictionaryFrontMatterWindowSize</key>
 	<string>0.5</string>
+	<key>DCSDictionaryManufacturerName</key>
+	<string>Jónatan Sólon</string>
 </dict>
 </plist>
-

@@ -25,6 +25,17 @@ export MACOSX_DEPLOYMENT_TARGET=$(MIN_OS_VERSION)
 DICT_BUILD_DIR   = ./objects
 BUILD_DICT_XML   = $(DICT_BUILD_TOOL_DIR)/build_dict.sh
 
+# build_dict.sh internally runs xmllint/xsltproc over dict.plist, whose
+# DOCTYPE points at http://www.apple.com/DTDs/PropertyList-1.0.dtd - a
+# network fetch that libxml2 intermittently truncates mid-response ("Comment
+# not terminated"), unrelated to anything in this project's own source
+# files (see ../../bin-morphology-recap.md's "Process notes"). macOS already
+# ships the identical DTD locally at /System/Library/DTDs/PropertyList.dtd
+# (byte-identical apart from a trailing newline); this XML catalog redirects
+# that lookup to it, so the build no longer depends on the network fetch
+# succeeding at all.
+export XML_CATALOG_FILES=$(CURDIR)/xml-catalog.xml
+
 # TARGET DIR: Maps natively to /Users/jonatansolon/Library/Dictionaries
 INSTALL_DIR      = $(HOME)/Library/Dictionaries
 

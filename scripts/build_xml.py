@@ -99,7 +99,7 @@ def build_dictionary():
                 search_indices.add(raw_form)
                 search_indices.add(raw_form_norm)
                 
-                display_form = html.escape(raw_form)
+                display_form = html.escape(raw_form, quote=False)
 
                 # Route data to the correct UI structure
                 if pos == 'verb':
@@ -136,14 +136,14 @@ def build_dictionary():
                 if raw_def.startswith('[') and raw_def.endswith(']'):
                     def_list = json.loads(raw_def)
                     # Join the array into a readable string
-                    clean_definition = "; ".join([html.escape(d) for d in def_list])
+                    clean_definition = "; ".join([html.escape(d, quote=False) for d in def_list])
                 else:
-                    clean_definition = html.escape(raw_def)
+                    clean_definition = html.escape(raw_def, quote=False)
             except:
-                clean_definition = html.escape(raw_def)
+                clean_definition = html.escape(raw_def, quote=False)
 
             # --- MAIN ENTRY CONTENT ---
-            xml.write(f'        <h1 class="entry-lemma">{html.escape(raw_lemma)}</h1>\n')
+            xml.write(f'        <h1 class="entry-lemma">{html.escape(raw_lemma, quote=False)}</h1>\n')
             xml.write(f'        <div class="definition">\n')
             xml.write(f'            <p>{clean_definition}</p>\n')
             xml.write(f'        </div>\n')
@@ -190,7 +190,7 @@ def build_dictionary():
                 xml.write('            <p class="morph-label">Forms</p>\n')
                 xml.write('            <table class="morphology-table">\n')
                 for m_form, m_parsings in generic_forms.items():
-                    parsing_display = ", ".join(html.escape(p) for p in m_parsings)
+                    parsing_display = ", ".join(html.escape(p, quote=False) for p in m_parsings)
                     xml.write(f'                <tr><td class="case-label">{m_form}</td><td>{parsing_display}</td></tr>\n')
                 xml.write('            </table>\n')
                 xml.write('        </div>\n')

@@ -5,13 +5,20 @@ import html
 import re
 import xml.etree.ElementTree as ET
 import unicodedata
+import urllib.parse
 from collections import defaultdict
+
+from phonology import greek_to_ipa
 
 # --- Paths ---
 TEI_XML_DIR = 'data/lsj_unicode/'
 MORPH_DB_PATH = 'data/morph.db'
 OUTPUT_XML_PATH = 'src/GreekDictionary.xml'
 GRAMMAR_WORD_INDEX_PATH = 'data/grammar_word_index.json'
+# CFBundleIdentifier of the companion Grammar Reference dictionary (see
+# src/GrammarReference.plist) - the target of x-dictionary:d: cross-reference
+# links below. Must stay in sync if that plist's identifier ever changes.
+GRAMMAR_DICT_BUNDLE_ID = 'com.jonatansolon.dictionary.GreekGrammarReference'
 # Below this many paragraph references across Smyth+Goodwin, a word is more
 # likely a one-off example citation than an entry the grammars are actually
 # *about* - particles/conjunctions/verbs-with-special-constructions clear
@@ -415,7 +422,7 @@ def render_grammar_html(info):
     badges = _build_grammar_badges(info)
     if not badges:
         return ""
-    spans = "".join(f'<span class="gram-badge">{html.escape(b)}</span>' for b in badges)
+    spans = "".join(f'<span class="gram-badge">{html.escape(b, quote=False)}</span>' for b in badges)
     return f'        <div class="entry-grammar">{spans}</div>\n'
 
 def render_sense_grammar_badges(info):
@@ -427,7 +434,7 @@ def render_sense_grammar_badges(info):
     badges = _build_grammar_badges(info)
     if not badges:
         return ""
-    return "".join(f'<span class="sense-gram-badge">{html.escape(b)}</span> ' for b in badges)
+    return "".join(f'<span class="sense-gram-badge">{html.escape(b, quote=False)}</span> ' for b in badges)
 
 def render_etymology_html(info):
     """Build the 'Related to: X' etymology line. Returns "" if there's nothing
@@ -436,7 +443,7 @@ def render_etymology_html(info):
     etyms = info.get('etym', [])
     if not etyms:
         return ""
-    words = ", ".join(f'<b class="gk-word">{html.escape(e)}</b>' for e in etyms)
+    words = ", ".join(f'<b class="gk-word">{html.escape(e, quote=False)}</b>' for e in etyms)
     return f'        <div class="entry-etymology"><span class="etym-label">Related to:</span> {words}</div>\n'
 
 def load_grammar_word_index():
@@ -452,13 +459,28 @@ def load_grammar_word_index():
         raw = json.load(f)
     return {word.lower(): [tuple(ref) for ref in refs] for word, refs in raw.items()}
 
+def _grammar_crossref_link(prefix, num):
+    """Anchor linking to the Grammar Reference entry indexed under 'S. 789'
+    (or 'G. 789') - x-dictionary:d: performs a define-style lookup of that
+    term restricted to the given dictionary, which Dictionary.app resolves
+    to whichever d:entry has a matching d:index (see citation_terms() in
+    build_grammar_reference.py, which indexes every entry under exactly this
+    'PREFIX. NUM' string). Using the index term rather than a raw entry id
+    means the link keeps working even if the Grammar Reference is rebuilt and
+    entry ids shift."""
+    term = f'{prefix}. {num}'
+    href = f'x-dictionary:d:{urllib.parse.quote(term)}:{GRAMMAR_DICT_BUNDLE_ID}'
+    return f'<a href="{href}">{html.escape(term, quote=False)}</a>'
+
 def render_grammar_crossref_html(refs):
     """Build the 'Grammar & Syntax: see Smyth/Goodwin' line for a headword
     that Smyth and/or Goodwin discuss by name (particles, conjunctions, and
     verbs taking special constructions - not ordinary vocabulary, which this
     is filtered against via GRAMMAR_CROSSREF_MIN_REFS before being called).
     Only cites a handful of paragraphs per source plus a total count, since
-    some particles (e.g. ἄν) have hundreds of references."""
+    some particles (e.g. ἄν) have hundreds of references. Each paragraph
+    number is a clickable x-dictionary:d: link straight into the companion
+    Grammar Reference dictionary."""
     by_source = defaultdict(list)
     for source, num in refs:
         by_source[source].append(num)
@@ -467,7 +489,8 @@ def render_grammar_crossref_html(refs):
         nums = sorted(set(by_source.get(source, [])))
         if not nums:
             continue
-        shown = ", ".join(str(n) for n in nums[:5])
+        prefix = 'S' if source == 'Smyth' else 'G'
+        shown = ", ".join(_grammar_crossref_link(prefix, n) for n in nums[:5])
         suffix = f', et al. ({len(nums)} total)' if len(nums) > 5 else ''
         parts.append(f'{source} §{shown}{suffix}')
     if not parts:
@@ -505,11 +528,11 @@ def render_degree_forms_html(positive_disp, comparative_form, superlative_form):
     the reference)."""
     if not comparative_form and not superlative_form:
         return ""
-    parts = [f'<span class="degree-form"><span class="degree-label">Positive:</span> <b class="gk-word">{html.escape(positive_disp)}</b></span>']
+    parts = [f'<span class="degree-form"><span class="degree-label">Positive:</span> <b class="gk-word">{html.escape(positive_disp, quote=False)}</b></span>']
     if comparative_form:
-        parts.append(f'<span class="degree-form"><span class="degree-label">Comparative:</span> <b class="gk-word">{html.escape(comparative_form)}</b></span>')
+        parts.append(f'<span class="degree-form"><span class="degree-label">Comparative:</span> <b class="gk-word">{html.escape(comparative_form, quote=False)}</b></span>')
     if superlative_form:
-        parts.append(f'<span class="degree-form"><span class="degree-label">Superlative:</span> <b class="gk-word">{html.escape(superlative_form)}</b></span>')
+        parts.append(f'<span class="degree-form"><span class="degree-label">Superlative:</span> <b class="gk-word">{html.escape(superlative_form, quote=False)}</b></span>')
     return '        <div class="entry-degree-forms">' + "  ·  ".join(parts) + '</div>\n'
 
 def parse_sense_node(node, depth=0, num_override=None):
@@ -527,7 +550,7 @@ def parse_sense_node(node, depth=0, num_override=None):
     
     fragments = []
     if node.text:
-        fragments.append(html.escape(clean_text_for_apple(node.text)))
+        fragments.append(html.escape(clean_text_for_apple(node.text), quote=False))
         
     for child in node:
         tag_local = child.tag.split('}')[-1]
@@ -540,16 +563,16 @@ def parse_sense_node(node, depth=0, num_override=None):
         
         # Apply professional structural typography styling
         if tag_local in ('foreign', 'orth', 'headword'):
-            fragments.append(f'<b class="gk-word">{html.escape(child_text)}</b>')
+            fragments.append(f'<b class="gk-word">{html.escape(child_text, quote=False)}</b>')
         elif tag_local in ('hi', 'title', 'author'):
-            fragments.append(f'<i>{html.escape(child_text)}</i>')
+            fragments.append(f'<i>{html.escape(child_text, quote=False)}</i>')
         elif tag_local in ('bibl', 'cit'):
-            fragments.append(f'<span class="citation">{html.escape(child_text)}</span>')
+            fragments.append(f'<span class="citation">{html.escape(child_text, quote=False)}</span>')
         else:
-            fragments.append(html.escape(child_text))
+            fragments.append(html.escape(child_text, quote=False))
             
         if child.tail:
-            fragments.append(html.escape(clean_text_for_apple(child.tail)))
+            fragments.append(html.escape(clean_text_for_apple(child.tail), quote=False))
             
     inline_content = " ".join(fragments)
     inline_content = re.sub(r'\s+', ' ', inline_content).strip()
@@ -568,7 +591,7 @@ def parse_sense_node(node, depth=0, num_override=None):
         major_class = ' sense-major' if is_major else ''
         sense_html += f'<div class="sense {depth_class}{major_class}">'
         if num_marker:
-            sense_html += f'<span class="sense-num">{html.escape(num_marker)}</span> '
+            sense_html += f'<span class="sense-num">{html.escape(num_marker, quote=False)}</span> '
         if sense_grammar_badges:
             sense_html += sense_grammar_badges
         if inline_content:
@@ -711,7 +734,7 @@ def build_unabridged_dictionary():
                         enclitic_variant = add_enclitic_accent_variant(n_clean)
                         if enclitic_variant: target_indices.add(enclitic_variant)
 
-                    disp_form = html.escape(clean_text_for_apple(f_form))
+                    disp_form = html.escape(clean_text_for_apple(f_form), quote=False)
                     if pos == 'verb':
                         is_verb = True
                         if person == '1st' and number == 'singular' and mood == 'indicative':
@@ -739,7 +762,12 @@ def build_unabridged_dictionary():
                     if clean_kw:
                         out_xml.write(f'        <d:index d:value="{html.escape(clean_kw)}"/>\n')
 
-                out_xml.write(f'        <h1 class="entry-lemma">{html.escape(raw_lemma)}</h1>\n')
+                out_xml.write(f'        <h1 class="entry-lemma">{html.escape(raw_lemma, quote=False)}</h1>\n')
+
+                # Reconstructed Classical Attic pronunciation (Vox Graeca), IPA.
+                ipa = greek_to_ipa(raw_lemma)
+                if ipa:
+                    out_xml.write(f'        <div class="pronunciation-line"><span class="ipa">{html.escape(ipa, quote=False)}</span></div>\n')
 
                 grammar_info = extract_grammar_and_etymology(get_preamble_children(entry, head_node))
                 out_xml.write(render_grammar_html(grammar_info))
@@ -837,7 +865,7 @@ def build_unabridged_dictionary():
                 if not leading_is_synthetic_injection:
                     entry_preamble = extract_preamble_text(entry, head_node, max_chars=300, for_overview=False)
                     if entry_preamble:
-                        out_xml.write(f'        <div class="entry-preamble">{html.escape(entry_preamble)}</div>\n')
+                        out_xml.write(f'        <div class="entry-preamble">{html.escape(entry_preamble, quote=False)}</div>\n')
 
                 # Decide the overview scheme from the RESOLVED labels (i.e. after
                 # the synthetic "A"/"I" reconstruction above), not the raw source
@@ -880,7 +908,7 @@ def build_unabridged_dictionary():
                 if len(overview_items) >= 1:
                     out_xml.write('        <div class="sense-overview">\n')
                     for ov_num, ov_brief in overview_items:
-                        out_xml.write(f'          <span class="overview-item"><span class="sense-num">{html.escape(ov_num)}</span> {html.escape(ov_brief)}</span>\n')
+                        out_xml.write(f'          <span class="overview-item"><span class="sense-num">{html.escape(ov_num, quote=False)}</span> {html.escape(ov_brief, quote=False)}</span>\n')
                     out_xml.write('        </div>\n')
 
                 definitions_html = ""
@@ -894,8 +922,8 @@ def build_unabridged_dictionary():
                         depth = sense_depth_from_n(label)
                         major_class = ' sense-major' if depth == 1 else ''
                         preamble_text = extract_preamble_text(entry, head_node, max_chars=200, for_overview=False)
-                        body_html = f' <span class="sense-body">{html.escape(preamble_text)}</span>' if preamble_text else ''
-                        definitions_html += f'<div class="sense sense-depth-{min(depth, 4)}{major_class}"><span class="sense-num">{html.escape(label)}</span>{body_html}</div>'
+                        body_html = f' <span class="sense-body">{html.escape(preamble_text, quote=False)}</span>' if preamble_text else ''
+                        definitions_html += f'<div class="sense sense-depth-{min(depth, 4)}{major_class}"><span class="sense-num">{html.escape(label, quote=False)}</span>{body_html}</div>'
                         continue
                     if label is None:
                         continue  # bullet marker (•) - skip entirely
@@ -909,7 +937,7 @@ def build_unabridged_dictionary():
                 if not definitions_html:
                     fallback_text = "".join(entry.itertext()).strip()
                     fallback_text = clean_text_for_apple(fallback_text.replace(raw_lemma, "", 1))
-                    definitions_html = f"<div>{html.escape(fallback_text)}</div>"
+                    definitions_html = f"<div>{html.escape(fallback_text, quote=False)}</div>"
                     
                 out_xml.write(f'{definitions_html}\n')
                 out_xml.write('        </div>\n')
@@ -1027,10 +1055,13 @@ def build_unabridged_dictionary():
                             clean_kw = sanitize_apple_key(keyword)
                             if clean_kw:
                                 out_xml.write(f'        <d:index d:value="{html.escape(clean_kw)}"/>\n')
-                        out_xml.write(f'        <h1 class="entry-lemma">{html.escape(citation)}</h1>\n')
+                        out_xml.write(f'        <h1 class="entry-lemma">{html.escape(citation, quote=False)}</h1>\n')
+                        syn_ipa = greek_to_ipa(citation)
+                        if syn_ipa:
+                            out_xml.write(f'        <div class="pronunciation-line"><span class="ipa">{html.escape(syn_ipa, quote=False)}</span></div>\n')
                         out_xml.write(
                             f'        <div class="entry-preamble">{degree_label} degree of '
-                            f'<b class="gk-word">{html.escape(raw_lemma)}</b></div>\n'
+                            f'<b class="gk-word">{html.escape(raw_lemma, quote=False)}</b></div>\n'
                         )
                         write_declension_section(grid, 'Declension')
                         out_xml.write('    </d:entry>\n\n')
