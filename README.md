@@ -5,7 +5,7 @@
 
 A custom `.dictionary` plugin for the native macOS Dictionary app and system-wide "Look Up" feature. This dictionary combines the **complete Liddell–Scott–Jones (LSJ) lexicon** (117,129 unabridged entries) with beautifully styled noun declensions and verb principal parts.
 
-**v1.2.0** — Adds a companion "Ancient Greek Grammar (Smyth & Goodwin)" dictionary with structured, signposted multi-paragraph rendering; reworked adjective comparative/superlative morphology; grammar & syntax cross-references from LSJ particle/verb entries.
+**v1.3.0** — Reconstructed Classical Attic pronunciation (IPA, per W. Sidney Allen's *Vox Graeca*) on every LSJ entry, with a cross-language Pronunciation Guide reference entry (English/German/French/Italian/Spanish/Modern Greek/Icelandic/Latin); vowel length (macron/breve) now shown directly on headwords wherever LSJ's own source records it; clickable cross-references between the two dictionaries; and an experimental Wiktionary etymology integration (**work in progress, ~12% coverage** - see Data Sources). Builds on v1.2.0's companion Grammar Reference dictionary.
 
 ## ✨ Features
 
@@ -13,8 +13,9 @@ A custom `.dictionary` plugin for the native macOS Dictionary app and system-wid
 * **System Integration:** Works natively with macOS "Look Up" (Force Click or Three-Finger Tap on any word).
 * **Morphology Tables:** Declensions and principal parts always visible (no folds). Declension tables show all cases and numbers; principal parts organized in classical order (Present → Future → Aorist → Perfect).
 * **Hierarchical Sense Indentation:** Major senses (I, II, III…) styled as visual subheadings; sub-senses indented with subtle left borders for visual hierarchy.
-* **Grammar & Etymology:** Part of speech, gender, declension class, and dialect/voice/comparative/diminutive labels are pulled out of LSJ's own TEI tags into a labeled badge row, both at the entry level and on individual senses (e.g. a sense marked "as Subst." shows a `substantive` badge right there). A bare "Related to: X" etymology line surfaces LSJ's own cross-reference where the source has one.
-* **Grammar & Syntax cross-references:** Particles, conjunctions, and verbs with special constructions (ἄν, γάρ, ὅτι, βούλομαι, τυγχάνω, …) are cross-referenced to the specific paragraphs of Smyth's and Goodwin's reference grammars that discuss them.
+* **Grammar & Etymology:** Part of speech, gender, declension class, and dialect/voice/comparative/diminutive labels are pulled out of LSJ's own TEI tags into a labeled badge row, both at the entry level and on individual senses (e.g. a sense marked "as Subst." shows a `substantive` badge right there). A bare "Related to: X" etymology line surfaces LSJ's own cross-reference where the source has one, and (where available - see Data Sources) a fuller Wiktionary etymology paragraph is shown alongside it.
+* **Reconstructed pronunciation (Vox Graeca):** Every entry shows a reconstructed Classical Attic IPA transcription per W. Sidney Allen's *Vox Graeca* - phonemic vowel length, the "spurious diphthongs" ει/ου, aspirated stops, pitch (not stress) accent modeled per-mora, hiatus-conditioned glide lengthening, and more. A companion "Pronunciation Guide" reference entry (searchable under "pronunciation") maps every vowel/diphthong/consonant/geminate onto real example words in eight other languages. Vowel length for the "dichrona" α/ι/υ (not shown by ordinary spelling) is displayed directly on the headword with a macron/breve wherever LSJ's own source data records it.
+* **Grammar & Syntax cross-references:** Particles, conjunctions, and verbs with special constructions (ἄν, γάρ, ὅτι, βούλομαι, τυγχάνω, …) are cross-referenced to the specific paragraphs of Smyth's and Goodwin's reference grammars that discuss them - and clickable, jumping straight into the companion Grammar Reference dictionary (and back again, for its own internal "see 348"-style cross-references).
 * **Companion "Greek Grammar Reference" dictionary:** A second `.dictionary` bundle covering ~700 topics from Smyth's *A Greek Grammar for Colleges* and Goodwin's *Syntax of the Moods and Tenses of the Greek Verb*, searchable both by topic ("Genitive Absolute", "Conditional Sentences", …) and by canonical citation (`S. 2070`, `Smyth 2070`, `G. 473`, `Goodwin 473`).
 * **Polytonic Support:** Handles Greek diacritics and polytonic accents smoothly within Apple's search engine.
 
@@ -63,6 +64,15 @@ python3 scripts/build_unabridged_xml.py
 cd src && make install
 ```
 
+#### **`scripts/fetch_wiktionary_etymology.py`** — Wiktionary etymology lookup (optional, work in progress)
+Filters a shared, un-versioned Wiktionary Ancient Greek extract (see Data Sources) down to `data/wiktionary_etymology.json`, which `build_unabridged_xml.py` reads to show a fuller etymology paragraph alongside LSJ's own bare cross-reference, where Wiktionary has one. Entirely optional - the main dictionary builds fine without it, just without that extra line. Run before `build_unabridged_xml.py` if you want it included.
+
+```bash
+python3 scripts/fetch_wiktionary_etymology.py
+python3 scripts/build_unabridged_xml.py
+cd src && make install
+```
+
 ### Full Build Instructions
 
 1. Clone this repository:
@@ -107,12 +117,15 @@ ancient-greek-mac/
 │   ├── morph.db                # SQLite morphology data [gitignored]
 │   ├── smyth_html/             # Smyth grammar HTML chapters [gitignored, fetched]
 │   ├── goodwin.xml             # Goodwin grammar TEI-XML [gitignored, fetched]
-│   └── grammar_word_index.json # Word → Smyth/Goodwin paragraph index [gitignored, generated]
+│   ├── grammar_word_index.json # Word → Smyth/Goodwin paragraph index [gitignored, generated]
+│   └── wiktionary_etymology.json # Word → Wiktionary etymology text [gitignored, generated]
 ├── scripts/
 │   ├── build_xml.py           # Abridged builder (SQLite → XML)
 │   ├── build_unabridged_xml.py # Full LSJ builder (TEI-XML → XML)
 │   ├── fetch_grammar_sources.py # Vendors Smyth + Goodwin from Perseus
-│   └── build_grammar_reference.py # Grammar Reference dictionary + word index builder
+│   ├── build_grammar_reference.py # Grammar Reference dictionary + word index builder
+│   ├── fetch_wiktionary_etymology.py # Filters the shared Wiktionary extract to data/wiktionary_etymology.json
+│   └── phonology.py           # Reconstructed-Attic IPA transcription engine
 ├── src/
 │   ├── GreekDictionary.xml    # Generated LSJ dictionary source [gitignored]
 │   ├── GreekDictionary.css    # LSJ dictionary styling
@@ -130,6 +143,8 @@ ancient-greek-mac/
 * **LSJ Lexicon:** Complete Liddell–Scott–Jones ancient Greek dictionary, provided by the [Chicago Digital Classics](https://github.com/perseids-project/morphology) project in TEI-XML format.
 * **Morphology:** Ancient Greek inflectional morphology from [Morpheus](https://github.com/perseids-project/morphology), integrated for noun declension and verb principal parts tables.
 * **Grammar Reference:** Herbert Weir Smyth, *A Greek Grammar for Colleges* (1920), via [PerseusDL/sg_reader](https://github.com/PerseusDL/sg_reader); William Watson Goodwin, *Syntax of the Moods and Tenses of the Greek Verb* (1889), via the [Perseus Digital Library](https://www.perseus.tufts.edu/). Both public domain, freely redistributable with attribution per Perseus's standard text-reuse policy.
+* **Pronunciation:** Reconstructed Classical Attic phonology per W. Sidney Allen, *Vox Graeca* (3rd ed., 1987).
+* **Wiktionary Etymology (⚠️ work in progress):** Etymology text from the Ancient Greek (`grc`) entries of [Wiktionary](https://en.wiktionary.org/), via [kaikki.org](https://kaikki.org/)'s raw [Wiktextract](https://github.com/tatuylonen/wiktextract) data dump (CC BY-SA 4.0 / GFDL, per Wiktionary's own licensing). This only covers about **12% of the LSJ dictionary** - most LSJ headwords (rare forms, proper nouns, inflected citation forms) simply have no matching Wiktionary entry yet - and where a headword has more than one Wiktionary sense with a genuinely different etymology, all of them are shown rather than guessed at. Shown alongside, not in place of, LSJ's own etymology cross-reference.
 
 ## 🤝 Contributing
 
@@ -155,6 +170,7 @@ This project uses a **dual-license model**:
 - **Code** (Python scripts, CSS, Makefile): [MIT License](LICENSE)
 - **Data** (LSJ lexicon, morphology): [Creative Commons Attribution-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0/) (per Chicago Digital Classics)
 - **Grammar Reference data** (Smyth, Goodwin): public domain texts, redistributed per the Perseus Digital Library's standard policy - freely distributable with attribution to Perseus, National Endowment for the Humanities funding, and the original authors.
+- **Wiktionary etymology data:** CC BY-SA 4.0 / GFDL, per [Wiktionary](https://en.wiktionary.org/)'s own dual licensing.
 
 See [LICENSE](LICENSE) for full details. When distributing this dictionary, all applicable licenses apply.
 
@@ -163,4 +179,6 @@ See [LICENSE](LICENSE) for full details. When distributing this dictionary, all 
 * **Liddell, Scott, Jones (LSJ):** The foundational ancient Greek lexicon.
 * **Herbert Weir Smyth** and **William Watson Goodwin:** Authors of the reference grammars behind the Grammar Reference dictionary and the Grammar & Syntax cross-references.
 * **Perseus Digital Library / Perseids:** For TEI-XML source data, morphology tooling, and the Smyth/Goodwin digitizations (funded in part by the National Endowment for the Humanities).
+* **W. Sidney Allen:** *Vox Graeca*, the reconstructed-pronunciation reference this dictionary's IPA transcriptions follow.
+* **Wiktionary contributors / kaikki.org / Wiktextract:** For the etymology data (work in progress, see Data Sources).
 * **Apple Dictionary Development Kit:** For the macOS `.dictionary` format specification.

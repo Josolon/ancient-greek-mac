@@ -255,5 +255,10 @@ data/goodwin.xml
 # Ignore generated word index (built by scripts/build_grammar_reference.py)
 data/grammar_word_index.json
 
+# Ignore generated Wiktionary etymology lookup (built by
+# scripts/fetch_wiktionary_etymology.py from the shared, un-versioned
+# ../wiktionary-grc-data/grc_entries.jsonl - see that folder's README)
+data/wiktionary_etymology.json
+
 # Ignore generated grammar reference dictionary source XML
 src/GrammarReference.xml

@@ -438,6 +438,255 @@ def citation_range(nums):
     return f'{lo}–{hi}' if lo != hi else f'{lo}'
 
 
+# --- Cross-language pronunciation guide ---
+# Rows are (greek_label, ipa, {lang_code: anchor_word}, best_langs, note), where
+# best_langs is None (no bold - either no example is a clear standout among a
+# wide field of equally-good candidates, or there's only one weak/approximate
+# candidate not worth singling out), a single lang code (a clear winner), or a
+# tuple of lang codes (a genuine tie - several candidates are equally the best,
+# not merely "also acceptable"). IPA mirrors the reconstructed-Attic system in
+# scripts/phonology.py exactly (same vowel/diphthong/consonant inventory, same
+# γ-nasal/σ-voicing/ρ-devoicing environments) - this is a human-facing
+# cross-language commentary on that same phonology, not an independent
+# restatement of it. A language is simply omitted from a row's dict when it has
+# no genuinely close real-word sound, rather than forcing a misleading
+# approximate match or inventing a constructed mnemonic - see Vox Latina's
+# "skip rather than guess" precedent (../phonology-recap.md) for why silence
+# beats a plausible wrong (or made-up) answer. A handful of rare sequences
+# (ηυ, ωυ, the iota-subscript diphthongs ᾳ ῃ ῳ, ρρ/ῥῥ) simply have no real word
+# in any of these eight languages and are left empty rather than papered over.
+#
+# Icelandic (not Old Norse - modern Icelandic is what the user actually knows
+# and can verify) has real, well-documented quirks that matter a lot here and
+# are easy to get wrong by analogy with Old Norse spelling, fact-checked via
+# web search rather than assumed:
+#   - b/d/g are always VOICELESS UNASPIRATED [p t k] - Icelandic has no true
+#     voiced stops at all, so it's the right anchor for π τ κ, not β γ δ,
+#     which is the opposite of what the spelling suggests.
+#   - p/t/k are aspirated [pʰ tʰ kʰ] word-initially - the right anchor for
+#     φ θ χ instead.
+#   - Doubled pp/tt/kk are PREASPIRATED [ʰp ʰt ʰk], not true length, so
+#     Icelandic sits out those geminate rows entirely; likewise ll/rl and
+#     (after a long vowel/diphthong) nn are pre-stopped to [tl]/[tn] rather
+#     than held long, so Icelandic sits out λλ and νν too. mm and ss are NOT
+#     part of either pattern and stay genuine long [mː]/[sː], so those two
+#     geminate rows do get an Icelandic example.
+#   - Half the vowel letters diphthongize: á [au̯], æ [ai̯], ó [ou̯],
+#     au [œy̯], ei/ey [ei̯] - while í/ý stay plain [i] and short e/i/o/u stay
+#     plain [ɛ]/[ɪ]/[ɔ]/[ʏ]. (æ, á, ei/ey, ó turn out to be excellent matches
+#     for αι, αυ, ει-before-vowel, ου-before-vowel respectively - a case
+#     where checking the real modern facts turned up *better* anchors than
+#     the old Old-Norse-flavored guesses had, not just fewer wrong ones.)
+#
+# Modern Greek is the language's own living descendant, but a large share of
+# these rows still have to omit it: iotacism merged η ι υ ει οι υι all onto
+# [i] and ω onto [o]; β γ δ (stops) became fricatives [vɣð]; φ θ χ (aspirated
+# stops) became fricatives [f θ x]; αι flattened to [e]; αυ/ευ became [av]/
+# [af]/[ev]/[ef]. But μ ν λ ρ κ π τ ξ ψ σ (and σ-before-voiced, and γ's nasal
+# assimilation before another velar) never changed at all - those rows can use
+# Modern Greek precisely because it's still doing the identical thing today
+# (though it's only bolded as best_lang where that living continuity is a
+# genuinely distinguishing argument, not on every single one of them - m and n
+# are so cross-linguistically uniform that "Modern Greek m is unchanged" isn't
+# actually more informative than any other language's m).
+_PRON_LANG_NAMES = {
+    'EN': 'English', 'DE': 'German', 'FR': 'French', 'IT': 'Italian',
+    'GR': 'Modern Greek', 'ES': 'Spanish', 'IS': 'Icelandic', 'LA': 'Latin',
+}
+
+_PRONUNCIATION_VOWELS = [
+    ('α', '/a/', {'DE': 'Mann', 'FR': 'patte', 'IT': 'casa', 'GR': 'μαμά', 'ES': 'pan', 'IS': 'land', 'LA': 'amō'},
+     None, 'open front unrounded, short'),
+    ('ᾱ', '/aː/', {'EN': 'father', 'DE': 'Bahn', 'FR': 'âme', 'ES': 'casa', 'IS': 'kaka', 'LA': 'māter'},
+     'DE', 'open front unrounded, long'),
+    ('ε', '/e/', {'FR': 'été', 'IT': 'sera', 'GR': 'μέλι', 'ES': 'mesa'},
+     ('FR', 'IT'), 'close-mid front unrounded, short'),
+    ('η', '/ɛː/', {'EN': 'bear', 'DE': 'Bär', 'IS': 'vera'},
+     'IS', 'open-mid front unrounded, long'),
+    ('ι', '/i/', {'EN': 'bit', 'FR': 'il', 'ES': 'mil', 'GR': 'τι', 'IS': 'ískra', 'LA': 'in'},
+     None, 'close front unrounded, short'),
+    ('ῑ', '/iː/', {'EN': 'see', 'DE': 'sie', 'FR': 'vie', 'IT': 'vino', 'ES': 'vida', 'GR': 'φίλος', 'IS': 'nýta', 'LA': 'vīta'},
+     ('DE', 'IS'), 'close front unrounded, long'),
+    ('ο', '/o/', {'FR': 'rose', 'IT': 'dove', 'GR': 'πόρτα', 'ES': 'poco'},
+     None, 'close-mid back rounded, short'),
+    ('ω', '/ɔː/', {'EN': 'law', 'FR': 'or', 'IT': 'cosa', 'IS': 'kona'},
+     'IS', 'open-mid back rounded, long'),
+    ('υ', '/y/', {'DE': 'Hütte', 'FR': 'duc', 'IS': 'upp', 'LA': 'lyra'},
+     'FR', 'close front rounded, short'),
+    ('ῡ', '/yː/', {'DE': 'früh', 'FR': 'pur', 'IS': 'muna', 'LA': 'Lȳdia'},
+     'DE', 'close front rounded, long'),
+]
+
+_PRONUNCIATION_DIPHTHONGS = [
+    ('αι', '/ai̯/', {'EN': 'eye', 'DE': 'Mai', 'FR': 'ail', 'IT': 'mai', 'ES': 'hay', 'IS': 'sær', 'LA': 'Caesar'},
+     None, 'open front vowel + close front offglide'),
+    ('αυ', '/au̯/', {'EN': 'how', 'DE': 'Haus', 'IT': 'causa', 'ES': 'causa', 'IS': 'sá', 'LA': 'aurum'},
+     None, 'open front vowel + close back offglide'),
+    ('ει', '/eː/', {'DE': 'Weg', 'FR': 'été', 'IT': 'vero', 'LA': 'mē'},
+     'DE', 'close-mid front unrounded, long'),
+    ('ευ', '/eu̯/', {'IT': 'Europa', 'ES': 'Europa', 'LA': 'Eurōpa'},
+     ('IT', 'ES', 'LA'), 'close-mid front vowel + close back offglide'),
+    ('οι', '/œi̯/', {'FR': 'feuille', 'IS': 'auga'},
+     'FR', 'open-mid front rounded vowel + close front offglide'),
+    ('ου', '/uː/', {'EN': 'food', 'DE': 'Blut', 'FR': 'amour', 'IT': 'luna', 'ES': 'luna', 'IS': 'hús', 'LA': 'lūna'},
+     'DE', 'close back rounded, long'),
+    ('υι', '/yi̯/', {'FR': 'huit', 'IS': 'hugi'},
+     None, 'close front rounded vowel + close front offglide'),
+    ('ηυ', '/ɛːu̯/', {}, None, 'open-mid front vowel, long + close back offglide'),
+    ('ωυ', '/ɔːu̯/', {'IS': 'bók'},
+     None, 'open-mid back vowel, long + close back offglide - a more open, longer version of Icelandic ó'),
+    ('ᾳ', '/aːi̯/', {}, None, 'open front vowel, long + close front offglide'),
+    ('ῃ', '/ɛːi̯/', {}, None, 'open-mid front vowel, long + close front offglide'),
+    ('ῳ', '/ɔːi̯/', {'EN': 'boy', 'IS': 'bogi'},
+     None, 'open-mid back vowel, long + close front offglide - a longer version of the "oy" in English "boy"'),
+]
+
+_PRONUNCIATION_CONSONANTS = [
+    ('β', '/b/', {'EN': 'bad', 'DE': 'Bett', 'FR': 'beau', 'IT': 'bene', 'ES': 'boca'},
+     None, 'voiced bilabial plosive'),
+    ('γ', '/ɡ/', {'EN': 'go', 'DE': 'gut', 'FR': 'gare', 'IT': 'gatto', 'ES': 'gato'},
+     None, 'voiced velar plosive'),
+    ('γ before κ χ γ ξ μ', '/ŋ/', {'EN': 'ink', 'DE': 'Bank', 'IT': 'banca', 'GR': 'Άγγλος', 'ES': 'banco', 'IS': 'banki'},
+     'GR', 'velar nasal'),
+    ('δ', '/d/', {'EN': 'dog', 'DE': 'du', 'FR': 'dans', 'IT': 'dare', 'ES': 'dos', 'LA': 'dare'},
+     ('IT', 'LA'), 'voiced dental plosive'),
+    ('ζ', '/zd/', {'EN': 'wisdom', 'LA': 'gaza'},
+     'EN', 'voiced alveolar fricative + voiced dental plosive cluster'),
+    ('θ', '/tʰ/', {'EN': 'top', 'DE': 'Tag', 'IS': 'töf'},
+     ('EN', 'DE', 'IS'), 'voiceless aspirated dental plosive'),
+    ('κ', '/k/', {'EN': 'skill', 'DE': 'Skandal', 'FR': 'quel', 'IT': 'cane', 'ES': 'cosa', 'GR': 'κόσμος', 'IS': 'gata', 'LA': 'canis'},
+     None, 'voiceless velar plosive'),
+    ('λ', '/l/', {'EN': 'love', 'DE': 'Liebe', 'FR': 'lune', 'IT': 'luna', 'ES': 'libro', 'GR': 'λίγο', 'IS': 'land', 'LA': 'lūna'},
+     None, 'lateral approximant'),
+    ('μ', '/m/', {'EN': 'man', 'DE': 'Mann', 'FR': 'mère', 'IT': 'madre', 'ES': 'madre', 'GR': 'μαμά', 'IS': 'móðir', 'LA': 'māter'},
+     None, 'bilabial nasal'),
+    ('ν', '/n/', {'EN': 'nine', 'DE': 'nein', 'FR': 'neuf', 'IT': 'nove', 'ES': 'no', 'GR': 'νερό', 'IS': 'níu', 'LA': 'novem'},
+     None, 'alveolar nasal'),
+    ('ξ', '/ks/', {'EN': 'box', 'DE': 'Hexe', 'FR': 'taxi', 'IT': 'extra', 'GR': 'ξένος', 'ES': 'taxi', 'IS': 'lax', 'LA': 'rēx'},
+     'GR', 'voiceless velar plosive + voiceless alveolar fricative cluster'),
+    ('π', '/p/', {'EN': 'spin', 'DE': 'Wespe', 'FR': 'père', 'IT': 'padre', 'ES': 'padre', 'GR': 'πόλη', 'IS': 'bera', 'LA': 'pater'},
+     None, 'voiceless bilabial plosive'),
+    ('ρ', '/r/', {'IT': 'Roma', 'GR': 'ρόδα', 'ES': 'perro', 'IS': 'ríkur', 'LA': 'Rōma'},
+     'ES', 'alveolar trill/tap'),
+    ('ῥ / word-initial ρ', '/r̥/', {'IS': 'hrafn'},
+     'IS', 'voiceless alveolar trill/tap'),
+    ('σ / ς', '/s/', {'EN': 'sun', 'DE': 'Tasse', 'FR': 'sac', 'IT': 'sasso', 'GR': 'σπίτι', 'ES': 'sol', 'IS': 'sól', 'LA': 'sōl'},
+     None, 'voiceless alveolar fricative'),
+    ('σ before β γ δ μ', '/z/', {'EN': 'zone', 'DE': 'Rose', 'FR': 'rose', 'IT': 'rosa', 'GR': 'σβήνω', 'ES': 'mismo'},
+     'GR', 'voiced alveolar fricative'),
+    ('τ', '/t/', {'EN': 'stop', 'DE': 'Stein', 'FR': 'tout', 'IT': 'tanto', 'ES': 'todo', 'GR': 'τόπος', 'IS': 'dagur', 'LA': 'tū'},
+     None, 'voiceless dental plosive'),
+    ('φ', '/pʰ/', {'EN': 'pot', 'DE': 'Paar', 'IS': 'pera'},
+     ('EN', 'DE', 'IS'), 'voiceless aspirated bilabial plosive'),
+    ('χ', '/kʰ/', {'EN': 'cat', 'DE': 'Kunst', 'IS': 'kæti'},
+     ('EN', 'DE', 'IS'), 'voiceless aspirated velar plosive'),
+    ('ψ', '/ps/', {'EN': 'lapse', 'DE': 'Gips', 'FR': 'capsule', 'IT': 'capsula', 'GR': 'ψωμί', 'IS': 'gips', 'LA': 'ipse'},
+     'GR', 'voiceless bilabial plosive + voiceless alveolar fricative cluster'),
+]
+
+# Split into one row per consonant (rather than one bundled row) so each can
+# carry its own examples and bolding. Limited to the geminates that actually
+# occur as ordinary Attic spelling - verified against the full LSJ headword
+# list (data/lsj_unicode/*.xml), not assumed by mechanically doubling every
+# consonant: κκ/λλ/μμ/νν/ππ/σσ/ττ each occur in dozens to hundreds of real
+# entries, but ββ/δδ/φφ/θθ/χχ/ψψ are essentially absent - the handful of hits
+# for those are proper nouns (Ἰαχχ- "Iacchus", Σάφφω "Sappho" in her native
+# Aeolic spelling), a Semitic loanword (ῥαββουνί "my master", from the NT),
+# poetic assimilation of a prefix (κάββαλε from κατα-βάλλω), or -δδω as a
+# Doric/Aeolic dialectal spelling of what Attic writes ζ - not genuine
+# gemination of β/δ/φ/θ/χ/ψ in the language. ψψ doesn't occur at all.
+_PRONUNCIATION_GEMINATES = [
+    ('γγ', '/ŋɡ/', {'EN': 'finger', 'DE': 'Finger', 'GR': 'εγγονός', 'ES': 'tengo', 'IS': 'þungur'},
+     'GR', 'velar nasal + voiced velar plosive'),
+    ('κκ', '(held twice as long)', {'IT': 'secco', 'EN': 'bookkeeper', 'IS': 'skuggi', 'LA': 'bucca'},
+     ('IT', 'IS', 'LA'), 'voiceless velar plosive, geminate'),
+    ('λλ', '(held twice as long)', {'IT': 'bello', 'EN': 'coolly', 'IS': 'karamella', 'LA': 'stella'},
+     ('IT', 'IS', 'LA'), 'lateral approximant, geminate'),
+    ('μμ', '(held twice as long)', {'IT': 'mamma', 'EN': 'roommate', 'IS': 'gammur', 'LA': 'flamma'},
+     ('IT', 'IS', 'LA'), 'bilabial nasal, geminate'),
+    ('νν', '(held twice as long)', {'IT': 'anno', 'EN': 'unnamed', 'IS': 'banna', 'LA': 'annus'},
+     ('IT', 'IS', 'LA'), 'alveolar nasal, geminate'),
+    ('ππ', '(held twice as long)', {'IT': 'coppa', 'IS': 'pabbi', 'LA': 'puppis'},
+     ('IT', 'IS', 'LA'), 'voiceless bilabial plosive, geminate'),
+    ('σσ', '(held twice as long)', {'IT': 'basso', 'IS': 'hissa', 'EN': 'misspell'},
+     ('IT', 'IS'), 'voiceless alveolar fricative, geminate'),
+    ('ττ', '(held twice as long)', {'IT': 'gatto', 'EN': 'outtake', 'IS': 'saddur', 'LA': 'sagitta'},
+     ('IT', 'IS', 'LA'), 'voiceless dental plosive, geminate'),
+    ('ρρ / ῥῥ', '/rr̥/', {'IS': 'vorhringur'},
+     'IS', 'voiced alveolar trill/tap + voiceless alveolar trill/tap'),
+]
+
+
+def _render_pron_anchors(examples, best_langs):
+    if not examples:
+        return '<span class="pron-none">—</span>'
+    if best_langs is None:
+        best_set = frozenset()
+    elif isinstance(best_langs, str):
+        best_set = frozenset((best_langs,))
+    else:
+        best_set = frozenset(best_langs)
+    parts = []
+    for lang, word in examples.items():
+        word_html = html_lib.escape(word, quote=False)
+        if lang in best_set:
+            word_html = f'<b class="pron-best">{word_html}</b>'
+        parts.append(f'<b class="pron-lang">{lang}</b> {word_html}')
+    return ' · '.join(parts)
+
+
+def write_pronunciation_guide_entry(out):
+    """A hand-authored reference entry (not derived from Smyth/Goodwin/LSJ)
+    mapping the reconstructed-Attic phonology in scripts/phonology.py onto
+    example words in seven other languages, searchable under "pronunciation".
+    Modeled on the analogous single-language (Icelandic) table in the sibling
+    project ../ancient-greek-icelandic-mac/scripts/build_xml.py -
+    write_pronunciation_guide_entry - extended here to multiple languages
+    since this dictionary's audience isn't assumed to know any one of them.
+    Whichever example is the single closest phonetic match for a row is
+    bolded (best_lang) - not always English, not always the same language
+    twice in a row, and deliberately not always Modern Greek even where it's
+    available, since being a living descendant doesn't automatically make it
+    the best-sounding match once iotacism/spirantization have changed a
+    given sound (see the module-level comment above for which rows Modern
+    Greek can and can't be used on at all)."""
+    entry_id = 'pronunciation_guide'
+    title = 'Pronunciation Guide'
+    out.write(f'    <d:entry id="{entry_id}" d:title="{html_lib.escape(title)}">\n')
+    for keyword in (title, 'pronunciation', 'pronunciation guide', 'IPA',
+                    'phonology', 'Vox Graeca'):
+        out.write(f'        <d:index d:value="{html_lib.escape(keyword)}"/>\n')
+    out.write(f'        <h1 class="grammar-heading">{html_lib.escape(title)}</h1>\n')
+    out.write(
+        '        <p class="entry-preamble">Reconstructed Classical Attic pronunciation '
+        '(c. 400 BC), per W. Sidney Allen\'s <i>Vox Graeca</i>, with example words in other '
+        'languages wherever a genuinely close sound exists. A language is left out of a row '
+        'rather than forced onto an approximate match it doesn\'t really have - silence beats '
+        'a misleading anchor.</p>\n')
+
+    def _write_table(heading, rows):
+        out.write('        <div class="morph-section">\n')
+        out.write(f'            <p class="morph-label">{html_lib.escape(heading)}</p>\n')
+        out.write('            <table class="grammar-table pron-table"><tbody>\n')
+        out.write('                <tr><th>Symbol</th><th>IPA</th><th>Cross-language anchors</th></tr>\n')
+        for greek, ipa, examples, best_lang, note in rows:
+            out.write('                <tr>')
+            out.write(f'<td class="case-label">{html_lib.escape(greek, quote=False)}</td>')
+            out.write(f'<td>{html_lib.escape(ipa, quote=False)}</td>')
+            out.write(f'<td>{_render_pron_anchors(examples, best_lang)}')
+            if note:
+                out.write(f'<div class="pron-note">{html_lib.escape(note, quote=False)}</div>')
+            out.write('</td></tr>\n')
+        out.write('            </tbody></table>\n')
+        out.write('        </div>\n')
+
+    _write_table('Vowels', _PRONUNCIATION_VOWELS)
+    _write_table('Diphthongs', _PRONUNCIATION_DIPHTHONGS)
+    _write_table('Consonants', _PRONUNCIATION_CONSONANTS)
+    _write_table('Geminates (doubled consonants)', _PRONUNCIATION_GEMINATES)
+    out.write('    </d:entry>\n\n')
+
+
 def build_grammar_reference_dictionary():
     print("📘 Parsing Smyth's A Greek Grammar for Colleges...")
     smyth_topics, smyth_words = parse_smyth()
@@ -490,6 +739,7 @@ def build_grammar_reference_dictionary():
                     out.write(f'<span class="para-num">{prefix}. {num}</span> ')
                 out.write(f'{html_frag}</div>\n')
             out.write('    </d:entry>\n\n')
+        write_pronunciation_guide_entry(out)
         out.write('</d:dictionary>\n')
     print(f"🎉 Wrote {len(all_topics)} grammar reference entries to {OUTPUT_XML_PATH}")
 

@@ -7,11 +7,31 @@ from later Koine / Erasmian / Modern Greek values:
 
   * Vowel LENGTH is phonemic: ε/ο are short close-mid [e]/[o]; η/ω are long
     open-mid [ɛː]/[ɔː]; α ι υ are short or long. υ is front-rounded [y(ː)].
-  * The "spurious diphthongs": ει = long close [eː] (NOT [ei̯]), ου = [uː] -
-    EXCEPT in hiatus (immediately followed by another vowel in the same
-    word), where they keep an audible offglide instead of reducing to a
-    pure long monophthong (Allen p.79; e.g. βασιλεία -> ...leia, not
-    ...leːa; see _SPURIOUS_HIATUS_GLIDE).
+  * The "spurious diphthongs": ει = long close [eː] (NOT [ei̯]) and ου =
+    long close [uː] (NOT [ou̯]) throughout. ει is the one exception: in
+    hiatus (immediately followed by another vowel in the same word) it
+    keeps an audible offglide instead of reducing to a pure long
+    monophthong (Allen p.79; e.g. βασιλεία -> ...leia, not ...leːa; see
+    _SPURIOUS_HIATUS_GLIDE). ου does NOT get the same hiatus exception -
+    it stays [uː] regardless of what follows.
+  * In hiatus, the genuine diphthongs αι/αυ/ευ/οι/υι - and ει, once it's
+    already diphthongal there - don't just keep a plain offglide, the
+    offglide itself is LENGTHENED/geminated: Allen, Vox Graeca pp.84-85,
+    "[ayy], [aww], [oyy], [eww], [üyy]" (English parallels "high yield,
+    bow-wave, toy yacht") for αι/αυ/οι/ευ/υι, and ει before a vowel
+    likewise stands for [eyy] (not the single-glide [ei̯] a naive reading
+    of the spurious-diphthong exception above would suggest). ου is not on
+    this list at all - it never gets a hiatus-lengthened glide because it
+    never gets a glide back in the first place.
+  * οι is front-rounded [œi̯] ("as in French feuille"), not back-rounded
+    [oi̯] - Allen pp.84-85: direct phonetic evidence is lacking, but he
+    finds a back [oi̯] hard to reconcile with Thucydides' report (2.54) of
+    genuine confusion over whether an oracle had said λοιμός "plague" or
+    λιμός "famine", which is only readily explained if οι was already
+    close to ι in frontness. This does NOT extend to ῳ (ω + iota
+    subscript), which stays back [ɔːi̯] - Allen's argument is specific to
+    οι and nothing in the source extends it to the long-vowel-plus-iota
+    diphthongs.
   * φ θ χ are aspirated STOPS [pʰ tʰ kʰ], not the fricatives of later Greek.
   * ζ = [zd]; ξ = [ks]; ψ = [ps].
   * γ before a velar (γ κ χ ξ) or before μ is the nasal [ŋ] ("gamma nasal"),
@@ -36,10 +56,17 @@ from later Koine / Erasmian / Modern Greek values:
     acute + grave over two morae of one long syllable).
 
 Length caveat: for the "dichrona" α ι υ, ordinary spelling does not show
-length. We transcribe them long only when the source actually carries a
-macron (ᾱ ῑ ῡ / combining U+0304); otherwise we default to short. This is a
-known limitation - LSJ records true length in its bracketed preambles, which
-a later pass could mine, but the bare headword is often ambiguous.
+length - this module transcribes one long only when the string it's given
+actually carries a macron (ᾱ ῑ ῡ / combining U+0304); otherwise it defaults
+to short. The caller is what supplies that information: LSJ records true
+length for roughly 30% of headwords in the `orth_orig` attribute of its own
+`<head>` element (a hyphenated form meant for the print edition's
+line-wrapping, e.g. `<head orth_orig="τῑμ-ή">τιμή</head>`) - see
+`merge_lsj_vowel_length` in scripts/build_unabridged_xml.py, which recovers
+those marks and grafts them onto the headword actually displayed before
+calling greek_to_ipa() on it. Where LSJ doesn't record a length (the
+remaining ~70%), this module still can't do anything but default to short -
+that's the source data's limitation, not this module's.
 """
 import unicodedata
 
@@ -75,20 +102,40 @@ _MONO = {
 }
 
 # Genuine diphthongs (first vowel + ι/υ offglide). ει and ου are the
-# "spurious diphthongs" - long monophthongs by classical Attic EXCEPT in
-# hiatus (immediately followed by another vowel within the same word),
-# where they keep an audible offglide instead of reducing to a pure long
-# monophthong (Allen, Vox Graeca p.79; e.g. βασιλεία -> ...leia, not
-# ...leːa). _SPURIOUS_HIATUS_GLIDE below overrides these two specifically
-# when that following-vowel condition holds.
+# "spurious diphthongs" - long monophthongs by classical Attic. Only ει gets
+# an exception in hiatus (immediately followed by another vowel within the
+# same word), keeping an audible offglide instead of reducing to a pure
+# long monophthong (Allen, Vox Graeca p.79; e.g. βασιλεία -> ...leia, not
+# ...leːa) - ου stays [uː] in every context, hiatus included.
+# _SPURIOUS_HIATUS_GLIDE below overrides ει specifically when that
+# following-vowel condition holds, with an already-lengthened glide (see
+# _HIATUS_GLIDE_LENGTHENERS just below) since Allen treats ει-in-hiatus as
+# following the same lengthening pattern as the genuine diphthongs, not as
+# merely regaining a plain single glide.
+# οι is front-rounded [œi̯] ("as in French feuille"), not back [oi̯] - see
+# module docstring for Allen's Thucydides-based argument for this.
 _DIPHTHONGS = {
     'αι': 'ai̯', 'αυ': 'au̯',
     'ει': 'eː', 'ευ': 'eu̯',
-    'οι': 'oi̯', 'ου': 'uː',
+    'οι': 'œi̯', 'ου': 'uː',
     'υι': 'yi̯',
     'ηυ': 'ɛːu̯', 'ωυ': 'ɔːu̯',
 }
-_SPURIOUS_HIATUS_GLIDE = {'ει': 'ei̯', 'ου': 'ou̯'}
+_SPURIOUS_HIATUS_GLIDE = {'ει': 'ei̯ː'}
+
+# In hiatus, a genuine diphthong's offglide is lengthened/geminated rather
+# than staying a plain single glide - Allen, Vox Graeca pp.84-85: "[ayy],
+# [aww], [oyy], [eww], [üyy]" for αι/αυ/οι/ευ/υι (English parallels "high
+# yield, bow-wave, toy yacht"). ηυ/ωυ aren't in Allen's list (both are
+# vanishingly rare to begin with) and are left unaffected; ου isn't a
+# genuine diphthong to begin with, so it's out of scope here regardless.
+_HIATUS_GLIDE_LENGTHENERS = {'αι', 'αυ', 'ευ', 'οι', 'υι'}
+
+def _lengthen_offglide(ipa_diphthong):
+    for glide in _GLIDE_OFFSETS:
+        if ipa_diphthong.endswith(glide):
+            return ipa_diphthong + 'ː'
+    return ipa_diphthong
 
 # Long diphthongs written with iota subscript.
 _IOTA_SUB_DIPH = {'α': 'aːi̯', 'η': 'ɛːi̯', 'ω': 'ɔːi̯'}
@@ -128,10 +175,14 @@ def _split_moras(ipa_vowel):
     diphthong (ai̯ -> a | i̯), or the length mark for a plain long monophthong
     (ɛː -> ɛ | ː). A monomoraic (short, single-character) nucleus has only
     one mora to place a tone on, so it's returned as (whole, whole) and the
-    caller treats that as "no real split"."""
+    caller treats that as "no real split". Searches for the glide rather
+    than requiring it at the very end, since a hiatus-lengthened offglide
+    (see _lengthen_offglide) has a trailing ː after it (ai̯ː -> a | i̯ː) that
+    an endswith check on the glide alone would miss."""
     for glide in _GLIDE_OFFSETS:
-        if ipa_vowel.endswith(glide):
-            return ipa_vowel[:-len(glide)], glide
+        idx = ipa_vowel.find(glide)
+        if idx > 0:
+            return ipa_vowel[:idx], ipa_vowel[idx:]
     if ipa_vowel.endswith('ː') and len(ipa_vowel) > 1:
         return ipa_vowel[:-1], 'ː'
     return ipa_vowel, ipa_vowel
@@ -188,8 +239,11 @@ def _transcribe_units(units):
                 digraph = base + nxt[0]
                 combined = _DIPHTHONGS[digraph]
                 after = units[i + 2] if i + 2 < n else None
-                if digraph in _SPURIOUS_HIATUS_GLIDE and after and after[0] in VOWELS:
+                hiatus = after and after[0] in VOWELS
+                if hiatus and digraph in _SPURIOUS_HIATUS_GLIDE:
                     combined = _SPURIOUS_HIATUS_GLIDE[digraph]
+                elif hiatus and digraph in _HIATUS_GLIDE_LENGTHENERS:
+                    combined = _lengthen_offglide(combined)
                 # Accent may be written on either element; take marks from both.
                 pair_marks = marks | nxt[1]
                 out.append(_apply_tone(combined, pair_marks))

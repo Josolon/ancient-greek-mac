@@ -208,6 +208,32 @@ span.etym-label {
     margin-right: 4px;
 }
 
+/* --- Wiktionary etymology (independent source, shown alongside LSJ's own
+   "Related to" line above, not merged into it - see
+   Josolon/wiktionary-grc-data/README.md for provenance/coverage caveats).
+   Prose paragraphs rather than a single line, since Wiktionary's etymology
+   text is a real derivation narrative, not a bare cross-reference. */
+div.entry-etymology-wiktionary {
+    margin: 2px 0 8px 0;
+    padding: 6px 10px;
+    background-color: #f7f5f0;
+    border-left: 3px solid #b8a888;
+    font-size: 0.9em;
+    color: #443;
+}
+
+div.entry-etymology-wiktionary p {
+    margin: 4px 0;
+}
+
+div.entry-etymology-wiktionary p:first-of-type {
+    margin-top: 2px;
+}
+
+div.entry-etymology-wiktionary p:last-of-type {
+    margin-bottom: 2px;
+}
+
 /* --- Grammar & Syntax cross-reference (Smyth/Goodwin, particles/conjunctions) --- */
 div.entry-grammar-crossref {
     margin: 2px 0 8px 0;

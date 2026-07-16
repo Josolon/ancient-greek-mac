@@ -15,6 +15,7 @@ TEI_XML_DIR = 'data/lsj_unicode/'
 MORPH_DB_PATH = 'data/morph.db'
 OUTPUT_XML_PATH = 'src/GreekDictionary.xml'
 GRAMMAR_WORD_INDEX_PATH = 'data/grammar_word_index.json'
+WIKTIONARY_ETYMOLOGY_PATH = 'data/wiktionary_etymology.json'
 # CFBundleIdentifier of the companion Grammar Reference dictionary (see
 # src/GrammarReference.plist) - the target of x-dictionary:d: cross-reference
 # links below. Must stay in sync if that plist's identifier ever changes.
@@ -62,6 +63,120 @@ def strip_greek_vowel_lengths(text):
     decomposed = unicodedata.normalize('NFD', text)
     filtered = "".join(ch for ch in decomposed if ord(ch) not in (0x0304, 0x0306))
     return unicodedata.normalize('NFC', filtered)
+
+_LENGTH_MARKS = {0x0304, 0x0306}  # macron, breve
+_ALL_DIACRITICS = {0x0300, 0x0301, 0x0304, 0x0306, 0x0308, 0x0313, 0x0314, 0x0342, 0x0345}
+_CIRCUMFLEX = '͂'
+
+def _diacritic_units(text):
+    """NFD-decomposes into [base_char, {combining_marks}] units, one per base
+    letter - the same shape phonology.py's own _decompose uses, needed here
+    to align two spellings of the same word letter-by-letter."""
+    units = []
+    for ch in unicodedata.normalize('NFD', text):
+        if ord(ch) in _ALL_DIACRITICS and units:
+            units[-1][1].add(ch)
+        else:
+            units.append([ch, set()])
+    return units
+
+def _mark_sort_key(ch):
+    """Combining marks of the same Unicode combining class (which every mark
+    used here is - all are class 230, "above") stack in the order they
+    appear in the string, nearest the base letter first; renderers don't
+    reorder them (confirmed against real precomposed Greek: NFD-decomposing
+    ᾄ/ἄ always yields breathing before accent, never the reverse). A macron
+    or breve should sit closer to the letter than an accent - e.g. ὁπλίτης's
+    marked ι should render ὁπλί̄της, with the macron directly on the letter
+    and the acute stacked outside it, matching how Wiktionary itself renders
+    the same vowel - so length marks get an explicit lower sort key than
+    everything else, and accents/breathing/iota-subscript keep whatever
+    relative order they already had (unaffected)."""
+    return (0, ord(ch)) if ord(ch) in _LENGTH_MARKS else (1, ord(ch))
+
+def _length_mark_or_none(source_mark, existing_marks):
+    """Returns source_mark unchanged, UNLESS existing_marks already has a
+    circumflex - circumflex can only ever land on a long vowel, so an
+    explicit macron/breve alongside it would be redundant, not just visually
+    superfluous. (Named to make call sites read as a decision, not just a
+    passthrough - this used to also pick between two Unicode variants of the
+    mark; it no longer needs to, see _mark_sort_key above.)"""
+    if _CIRCUMFLEX in existing_marks:
+        return None
+    return source_mark if ord(source_mark) in _LENGTH_MARKS else None
+
+def merge_lsj_vowel_length(raw_lemma, orth_orig):
+    """LSJ marks true vowel length (macron/breve) for the dichrona α ι υ in
+    the head element's own orth_orig attribute - a hyphenated form meant for
+    the print edition's line-wrapping, e.g. <head orth_orig="τῑμ-ή">τιμή
+    </head> - but strips those marks from the headword text actually shown.
+    This recovers them: aligns orth_orig (hyphens removed) against raw_lemma
+    letter-by-letter and, only where every base letter matches one-to-one,
+    grafts orth_orig's length marks onto raw_lemma's own (differently
+    placed, in some entries - e.g. ὁπλίτης's accent and ὁπλῑτ-ης's macron
+    land on the same ι but orth_orig's hyphenated form doesn't carry the
+    accent at all) accent marks, rather than using orth_orig's text
+    wholesale. Falls back to raw_lemma unchanged - no length marks shown -
+    whenever the two don't align letter-for-letter (different inflected
+    form, alternate spelling, multi-word headword, OCR noise): silence over
+    a guessed length, same principle as the Latin project's macron gating
+    (see ../phonology-recap.md)."""
+    if not orth_orig:
+        return raw_lemma
+    oo_units = _diacritic_units(orth_orig.replace('-', ''))
+    raw_units = _diacritic_units(raw_lemma)
+    if len(oo_units) != len(raw_units):
+        return raw_lemma
+    for (oo_base, _), (raw_base, _) in zip(oo_units, raw_units):
+        if oo_base.lower() != raw_base.lower():
+            return raw_lemma
+    merged = []
+    for (_, oo_marks), (raw_base, raw_marks) in zip(oo_units, raw_units):
+        marks = set(raw_marks)
+        for m in oo_marks:
+            kept = _length_mark_or_none(m, raw_marks)
+            if kept:
+                marks.add(kept)
+        merged.append(raw_base + ''.join(sorted(marks, key=_mark_sort_key)))
+    return unicodedata.normalize('NFC', ''.join(merged))
+
+def merge_lsj_pron_length(lemma, pron_bracket):
+    """A second, independent place LSJ records dichrona length: a <pron>
+    element immediately after <head>, giving a short bracketed fragment of
+    the headword rather than the whole thing - e.g. <head>θύω</head> (B)
+    <pron>[ῡ]</pron> for the sense of "to rush" (as opposed to (A) "to
+    sacrifice", which carries no such mark). Some entries have this and not
+    orth_orig's marked hyphenation (see merge_lsj_vowel_length) - both are
+    checked, independently, since neither reliably subsumes the other.
+    Locates the fragment's bare-letter sequence as a substring of lemma and
+    grafts its length marks onto the matching span, but only when that bare
+    sequence occurs exactly once - an ambiguous or coincidental match (e.g.
+    a single unadorned 'α' matching several vowels in a longer word) is left
+    unmarked rather than guessed at, same principle as everywhere else in
+    this pipeline."""
+    if not pron_bracket:
+        return lemma
+    frag_units = _diacritic_units(pron_bracket)
+    frag_bases = ''.join(u[0].lower() for u in frag_units)
+    word_units = _diacritic_units(lemma)
+    word_bases = ''.join(u[0].lower() for u in word_units)
+    span = len(frag_bases)
+    positions = [i for i in range(len(word_bases) - span + 1)
+                 if word_bases[i:i + span] == frag_bases]
+    if len(positions) != 1 or span == 0:
+        return lemma
+    start = positions[0]
+    merged = [list(u) for u in word_units]
+    for offset, (_, frag_marks) in enumerate(frag_units):
+        base, marks = merged[start + offset]
+        marks = set(marks)
+        for m in frag_marks:
+            kept = _length_mark_or_none(m, marks)
+            if kept:
+                marks.add(kept)
+        merged[start + offset] = [base, marks]
+    return unicodedata.normalize(
+        'NFC', ''.join(b + ''.join(sorted(m, key=_mark_sort_key)) for b, m in merged))
 
 def normalize_grave_to_acute(text):
     """Converts grave accents to acute so text-selection Look Up matches dictionary entries."""
@@ -446,6 +561,39 @@ def render_etymology_html(info):
     words = ", ".join(f'<b class="gk-word">{html.escape(e, quote=False)}</b>' for e in etyms)
     return f'        <div class="entry-etymology"><span class="etym-label">Related to:</span> {words}</div>\n'
 
+def load_wiktionary_etymology():
+    """Loads the word -> [etymology_text, ...] lookup built by
+    fetch_wiktionary_etymology.py from the shared
+    ../wiktionary-grc-data/grc_entries.jsonl extract. Optional, like
+    load_grammar_word_index() below - the main build still works without it,
+    just without the Wiktionary etymology line."""
+    if not os.path.exists(WIKTIONARY_ETYMOLOGY_PATH):
+        print(f"⚠️  {WIKTIONARY_ETYMOLOGY_PATH} not found - skipping Wiktionary etymology "
+              f"(run scripts/fetch_wiktionary_etymology.py first to enable it).")
+        return {}
+    with open(WIKTIONARY_ETYMOLOGY_PATH, encoding='utf-8') as f:
+        return json.load(f)
+
+def render_wiktionary_etymology_html(etyms):
+    """Build the Wiktionary etymology block - prose, unlike LSJ's own bare
+    cross-reference line above, so it gets its own paragraph(s) rather than
+    a single labeled line. Shown *alongside* LSJ's own etymology (not as a
+    replacement) wherever Wiktionary has one, per the coverage/provenance
+    caveats in ../wiktionary-grc-data/README.md: only ~12% of LSJ headwords
+    have a match at all, and a handful of headwords have more than one
+    genuinely different etymology for different senses that this project
+    doesn't attempt to match to a specific LSJ (A)/(B) sense - shown as
+    separate paragraphs rather than picked-or-merged, since guessing which
+    belongs to which would be worse than showing both plainly labeled as
+    unresolved. Explicitly labeled by source (not blended into LSJ's own
+    line) since the two are independently-sourced and shouldn't read as one
+    unified claim."""
+    if not etyms:
+        return ""
+    paras = "".join(f'<p>{html.escape(e, quote=False)}</p>' for e in etyms)
+    return (f'        <div class="entry-etymology-wiktionary">'
+            f'<span class="etym-label">Wiktionary etymology:</span>{paras}</div>\n')
+
 def load_grammar_word_index():
     """Loads the word -> [(source, paragraph number), ...] index built by
     build_grammar_reference.py from Smyth's and Goodwin's grammars. Optional:
@@ -611,6 +759,7 @@ def build_unabridged_dictionary():
     morph_cursor = morph_conn.cursor()
 
     grammar_word_index = load_grammar_word_index()
+    wiktionary_etymology = load_wiktionary_etymology()
 
     if not os.path.exists(TEI_XML_DIR):
         print(f"❌ Error: Target repository path missing at {TEI_XML_DIR}")
@@ -661,7 +810,26 @@ def build_unabridged_dictionary():
                 # Ignore metadata structures or plain numeric page breaks
                 if not raw_lemma or raw_lemma.replace('-', '').isdigit() or "Preface" in raw_lemma:
                     continue
-                
+
+                # LSJ's own recorded length for the dichrona α ι υ, from two
+                # independent places in the source (see merge_lsj_vowel_length
+                # and merge_lsj_pron_length) - used for the displayed headword
+                # and the IPA line, but NOT for lookup/search, which stays
+                # based on the plain (length-unmarked) raw_lemma throughout.
+                display_lemma = merge_lsj_vowel_length(
+                    raw_lemma, head_node.get('orth_orig'))
+                head_parent = parent_map.get(head_node)
+                if head_parent is not None:
+                    siblings = list(head_parent)
+                    head_idx = siblings.index(head_node) if head_node in siblings else -1
+                    if 0 <= head_idx < len(siblings) - 1:
+                        next_sib = siblings[head_idx + 1]
+                        if next_sib.tag.split('}')[-1] == 'pron':
+                            pron_text = clean_text_for_apple("".join(next_sib.itertext()))
+                            m = re.match(r'\[([^\]]*)\]$', pron_text)
+                            if m:
+                                display_lemma = merge_lsj_pron_length(display_lemma, m.group(1))
+
                 lookup_lemma = strip_greek_vowel_lengths(raw_lemma)
                 safe_title = sanitize_apple_key(lookup_lemma)
                 if not safe_title: safe_title = "unknown"
@@ -762,16 +930,23 @@ def build_unabridged_dictionary():
                     if clean_kw:
                         out_xml.write(f'        <d:index d:value="{html.escape(clean_kw)}"/>\n')
 
-                out_xml.write(f'        <h1 class="entry-lemma">{html.escape(raw_lemma, quote=False)}</h1>\n')
+                out_xml.write(f'        <h1 class="entry-lemma">{html.escape(display_lemma, quote=False)}</h1>\n')
 
-                # Reconstructed Classical Attic pronunciation (Vox Graeca), IPA.
-                ipa = greek_to_ipa(raw_lemma)
+                # Reconstructed Classical Attic pronunciation (Vox Graeca), IPA -
+                # display_lemma carries LSJ's own recorded α/ι/υ length where
+                # available, so a dichronon transcribes as genuinely long/short
+                # instead of always defaulting to short (see
+                # merge_lsj_vowel_length).
+                ipa = greek_to_ipa(display_lemma)
                 if ipa:
                     out_xml.write(f'        <div class="pronunciation-line"><span class="ipa">{html.escape(ipa, quote=False)}</span></div>\n')
 
                 grammar_info = extract_grammar_and_etymology(get_preamble_children(entry, head_node))
                 out_xml.write(render_grammar_html(grammar_info))
                 out_xml.write(render_etymology_html(grammar_info))
+
+                wikt_etyms = wiktionary_etymology.get(strip_all_greek_accents(raw_lemma).lower(), [])
+                out_xml.write(render_wiktionary_etymology_html(wikt_etyms))
 
                 grammar_refs = grammar_word_index.get(strip_all_greek_accents(raw_lemma).lower(), [])
                 if len(grammar_refs) >= GRAMMAR_CROSSREF_MIN_REFS:

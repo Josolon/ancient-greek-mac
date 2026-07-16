@@ -91,3 +91,43 @@ table.grammar-table tr:last-child td {
 table.grammar-table tr:nth-child(even) td {
     background-color: #eef2fc;
 }
+
+/* --- Cross-language pronunciation guide table --- */
+table.pron-table th {
+    text-align: left;
+    padding: 4px 10px;
+    font-size: 0.85em;
+    color: #2a4a9a;
+    background-color: #dde6f8;
+}
+
+b.pron-lang {
+    display: inline-block;
+    min-width: 1.6em;
+    font-size: 0.78em;
+    font-weight: 700;
+    color: #2a4a9a;
+    font-family: -apple-system, "Helvetica Neue", sans-serif;
+}
+
+/* The single closest cross-language match in a row, per _PRONUNCIATION_*
+   best_lang - not every row has one (approximations and rare sounds with
+   no strong candidate leave nothing bolded). */
+b.pron-best {
+    font-weight: 800;
+    color: #002266;
+    text-decoration: underline;
+    text-decoration-color: #c8d4ee;
+    text-decoration-thickness: 2px;
+}
+
+span.pron-none {
+    color: #99a0b3;
+}
+
+div.pron-note {
+    margin-top: 3px;
+    font-size: 0.85em;
+    font-style: italic;
+    color: #667;
+}
