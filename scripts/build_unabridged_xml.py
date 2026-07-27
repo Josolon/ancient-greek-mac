@@ -81,19 +81,41 @@ def _diacritic_units(text):
             units.append([ch, set()])
     return units
 
+_MARK_TIER = {
+    0x0304: 0, 0x0306: 0,            # macron, breve - closest to the letter (no Unicode
+                                      # precomposed precedent combines these with anything
+                                      # else, so this tier's ranking is a choice, not a
+                                      # confirmed fact - see docstring)
+    0x0313: 1, 0x0314: 1,            # smooth/rough breathing
+    0x0300: 2, 0x0301: 2, 0x0342: 2, # grave, acute, circumflex
+    0x0345: 3,                       # iota subscript - genuinely a different combining
+                                      # class (240, "below"); last regardless
+    0x0308: 2,                       # diaeresis - no precomposed combination exists to
+                                      # check against; grouped with the accent tier as the
+                                      # least-wrong default
+}
+
 def _mark_sort_key(ch):
     """Combining marks of the same Unicode combining class (which every mark
-    used here is - all are class 230, "above") stack in the order they
-    appear in the string, nearest the base letter first; renderers don't
-    reorder them (confirmed against real precomposed Greek: NFD-decomposing
-    ᾄ/ἄ always yields breathing before accent, never the reverse). A macron
-    or breve should sit closer to the letter than an accent - e.g. ὁπλίτης's
-    marked ι should render ὁπλί̄της, with the macron directly on the letter
-    and the acute stacked outside it, matching how Wiktionary itself renders
-    the same vowel - so length marks get an explicit lower sort key than
-    everything else, and accents/breathing/iota-subscript keep whatever
-    relative order they already had (unaffected)."""
-    return (0, ord(ch)) if ord(ch) in _LENGTH_MARKS else (1, ord(ch))
+    used here is, except iota subscript - see _MARK_TIER) stack in the order
+    they appear in the string, nearest the base letter first; renderers
+    don't reorder them. Sorting by raw codepoint value is NOT safe here and
+    previously produced wrong output silently: breathing's codepoints
+    (0x313/0x314) are numerically higher than acute/grave's (0x300/0x301),
+    but breathing consistently decomposes BEFORE the accent in every real
+    precomposed Greek character that combines them (confirmed directly:
+    NFD-decomposing ἥ gives rough-breathing then acute, ᾄ gives smooth-
+    breathing then acute then iota-subscript, ἇ gives rough-breathing then
+    circumflex) - sorting those two by codepoint would put the accent
+    first, which is backwards, and silently was for every breathing+accent
+    word once this module started reconstructing the mark sequence at all
+    (any dichrona-length graft, even to some OTHER vowel in the same word,
+    re-sorts every vowel's marks - see merge_vowel_length_from_reference).
+    _MARK_TIER encodes the real, tested order instead of assuming codepoint
+    order means anything; ties within a tier fall back to codepoint order,
+    which never arises among the marks actually used here (no tier has two
+    members that can co-occur on one vowel)."""
+    return (_MARK_TIER.get(ord(ch), 9), ord(ch))
 
 def _length_mark_or_none(source_mark, existing_marks):
     """Returns source_mark unchanged, UNLESS existing_marks already has a
