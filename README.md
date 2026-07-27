@@ -64,11 +64,11 @@ python3 scripts/build_unabridged_xml.py
 cd src && make install
 ```
 
-#### **`scripts/fetch_wiktionary_etymology.py`** — Wiktionary etymology lookup (optional, work in progress)
-Filters a shared, un-versioned Wiktionary Ancient Greek extract (see Data Sources) down to `data/wiktionary_etymology.json`, which `build_unabridged_xml.py` reads to show a fuller etymology paragraph alongside LSJ's own bare cross-reference, where Wiktionary has one. Entirely optional - the main dictionary builds fine without it, just without that extra line. Run before `build_unabridged_xml.py` if you want it included.
+#### **`scripts/fetch_wiktionary_data.py`** — Wiktionary etymology + vowel length (optional, work in progress)
+Filters a shared, un-versioned Wiktionary Ancient Greek extract (see Data Sources) down to `data/wiktionary_etymology.json` (a fuller etymology paragraph shown alongside LSJ's own bare cross-reference, where Wiktionary has one) and `data/wiktionary_vowel_length.json` (a third, independent source of dichrona α/ι/υ length for headwords LSJ's own data doesn't mark at all - e.g. λύω, θύω "to sacrifice"). `build_unabridged_xml.py` reads both. Entirely optional - the main dictionary builds fine without either, just without that extra data. Run before `build_unabridged_xml.py` if you want them included.
 
 ```bash
-python3 scripts/fetch_wiktionary_etymology.py
+python3 scripts/fetch_wiktionary_data.py
 python3 scripts/build_unabridged_xml.py
 cd src && make install
 ```
@@ -118,13 +118,14 @@ ancient-greek-mac/
 │   ├── smyth_html/             # Smyth grammar HTML chapters [gitignored, fetched]
 │   ├── goodwin.xml             # Goodwin grammar TEI-XML [gitignored, fetched]
 │   ├── grammar_word_index.json # Word → Smyth/Goodwin paragraph index [gitignored, generated]
-│   └── wiktionary_etymology.json # Word → Wiktionary etymology text [gitignored, generated]
+│   ├── wiktionary_etymology.json # Word → Wiktionary etymology text [gitignored, generated]
+│   └── wiktionary_vowel_length.json # Word → Wiktionary canonical (length-marked) form [gitignored, generated]
 ├── scripts/
 │   ├── build_xml.py           # Abridged builder (SQLite → XML)
 │   ├── build_unabridged_xml.py # Full LSJ builder (TEI-XML → XML)
 │   ├── fetch_grammar_sources.py # Vendors Smyth + Goodwin from Perseus
 │   ├── build_grammar_reference.py # Grammar Reference dictionary + word index builder
-│   ├── fetch_wiktionary_etymology.py # Filters the shared Wiktionary extract to data/wiktionary_etymology.json
+│   ├── fetch_wiktionary_data.py # Filters the shared Wiktionary extract to the two data/wiktionary_*.json lookups
 │   └── phonology.py           # Reconstructed-Attic IPA transcription engine
 ├── src/
 │   ├── GreekDictionary.xml    # Generated LSJ dictionary source [gitignored]

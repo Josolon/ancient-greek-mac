@@ -16,6 +16,7 @@ MORPH_DB_PATH = 'data/morph.db'
 OUTPUT_XML_PATH = 'src/GreekDictionary.xml'
 GRAMMAR_WORD_INDEX_PATH = 'data/grammar_word_index.json'
 WIKTIONARY_ETYMOLOGY_PATH = 'data/wiktionary_etymology.json'
+WIKTIONARY_VOWEL_LENGTH_PATH = 'data/wiktionary_vowel_length.json'
 # CFBundleIdentifier of the companion Grammar Reference dictionary (see
 # src/GrammarReference.plist) - the target of x-dictionary:d: cross-reference
 # links below. Must stay in sync if that plist's identifier ever changes.
@@ -96,44 +97,57 @@ def _mark_sort_key(ch):
 
 def _length_mark_or_none(source_mark, existing_marks):
     """Returns source_mark unchanged, UNLESS existing_marks already has a
-    circumflex - circumflex can only ever land on a long vowel, so an
-    explicit macron/breve alongside it would be redundant, not just visually
-    superfluous. (Named to make call sites read as a decision, not just a
-    passthrough - this used to also pick between two Unicode variants of the
-    mark; it no longer needs to, see _mark_sort_key above.)"""
+    circumflex (which can only ever land on a long vowel, so an explicit
+    macron/breve alongside it would be redundant) OR already has a length
+    mark of its own. That second check is what makes chaining multiple
+    reference sources safe and priority-ordered: merge_vowel_length_from_reference
+    is called once per source (LSJ's orth_orig, then its <pron> bracket, then
+    Wiktionary's canonical form, in that order - see display_lemma below),
+    and once any of them has marked a given vowel, a later, lower-priority
+    source's opinion on that SAME vowel is silently dropped rather than
+    fighting it for a second mark (which would render as a garbled
+    macron+breve on one letter) or silently overwriting it."""
     if _CIRCUMFLEX in existing_marks:
+        return None
+    if any(ord(m) in _LENGTH_MARKS for m in existing_marks):
         return None
     return source_mark if ord(source_mark) in _LENGTH_MARKS else None
 
-def merge_lsj_vowel_length(raw_lemma, orth_orig):
-    """LSJ marks true vowel length (macron/breve) for the dichrona α ι υ in
-    the head element's own orth_orig attribute - a hyphenated form meant for
-    the print edition's line-wrapping, e.g. <head orth_orig="τῑμ-ή">τιμή
-    </head> - but strips those marks from the headword text actually shown.
-    This recovers them: aligns orth_orig (hyphens removed) against raw_lemma
-    letter-by-letter and, only where every base letter matches one-to-one,
-    grafts orth_orig's length marks onto raw_lemma's own (differently
-    placed, in some entries - e.g. ὁπλίτης's accent and ὁπλῑτ-ης's macron
-    land on the same ι but orth_orig's hyphenated form doesn't carry the
-    accent at all) accent marks, rather than using orth_orig's text
-    wholesale. Falls back to raw_lemma unchanged - no length marks shown -
-    whenever the two don't align letter-for-letter (different inflected
-    form, alternate spelling, multi-word headword, OCR noise): silence over
-    a guessed length, same principle as the Latin project's macron gating
-    (see ../phonology-recap.md)."""
-    if not orth_orig:
+def merge_vowel_length_from_reference(raw_lemma, reference):
+    """Grafts dichrona (α ι υ) length marks from a full-word reference
+    spelling onto raw_lemma, wherever the two align letter-for-letter.  Used
+    against two independent references, checked in priority order at the
+    call site (see display_lemma below) - LSJ's own head/orth_orig attribute
+    (a hyphenated form meant for the print edition's line-wrapping, e.g.
+    <head orth_orig="τῑμ-ή">τιμή</head> - hyphens are stripped before
+    aligning) first, then Wiktionary's 'canonical' form (data/wiktionary_vowel_length.json,
+    see fetch_wiktionary_data.py) as a fallback for headwords LSJ doesn't
+    mark at all, e.g. λύω/θύω "to sacrifice" - both genuinely long-υ verbs
+    LSJ just doesn't bother re-marking, not short ones.
+
+    Aligns the reference (hyphens removed) against raw_lemma letter-by-letter
+    and, only where every base letter matches one-to-one, grafts the
+    reference's length marks onto raw_lemma's own (differently placed, in
+    some entries - e.g. ὁπλίτης's accent and ὁπλῑτ-ης's macron land on the
+    same ι but LSJ's hyphenated form doesn't carry the accent at all) accent
+    marks, rather than using the reference's text wholesale. Falls back to
+    raw_lemma unchanged - no length marks shown - whenever the two don't
+    align letter-for-letter (different inflected form, alternate spelling,
+    multi-word headword, OCR noise): silence over a guessed length, same
+    principle as the Latin project's macron gating (see ../phonology-recap.md)."""
+    if not reference:
         return raw_lemma
-    oo_units = _diacritic_units(orth_orig.replace('-', ''))
+    ref_units = _diacritic_units(reference.replace('-', ''))
     raw_units = _diacritic_units(raw_lemma)
-    if len(oo_units) != len(raw_units):
+    if len(ref_units) != len(raw_units):
         return raw_lemma
-    for (oo_base, _), (raw_base, _) in zip(oo_units, raw_units):
-        if oo_base.lower() != raw_base.lower():
+    for (ref_base, _), (raw_base, _) in zip(ref_units, raw_units):
+        if ref_base.lower() != raw_base.lower():
             return raw_lemma
     merged = []
-    for (_, oo_marks), (raw_base, raw_marks) in zip(oo_units, raw_units):
+    for (_, ref_marks), (raw_base, raw_marks) in zip(ref_units, raw_units):
         marks = set(raw_marks)
-        for m in oo_marks:
+        for m in ref_marks:
             kept = _length_mark_or_none(m, raw_marks)
             if kept:
                 marks.add(kept)
@@ -144,10 +158,12 @@ def merge_lsj_pron_length(lemma, pron_bracket):
     """A second, independent place LSJ records dichrona length: a <pron>
     element immediately after <head>, giving a short bracketed fragment of
     the headword rather than the whole thing - e.g. <head>θύω</head> (B)
-    <pron>[ῡ]</pron> for the sense of "to rush" (as opposed to (A) "to
-    sacrifice", which carries no such mark). Some entries have this and not
-    orth_orig's marked hyphenation (see merge_lsj_vowel_length) - both are
-    checked, independently, since neither reliably subsumes the other.
+    <pron>[ῡ]</pron> for the sense of "to rush" (LSJ doesn't mark this on
+    sense (A) "to sacrifice" at all, even though it's equally long - see
+    merge_vowel_length_from_reference's Wiktionary fallback for that case).
+    Some entries have this and not
+    orth_orig's marked hyphenation (see merge_vowel_length_from_reference) -
+    both are checked, independently, since neither reliably subsumes the other.
     Locates the fragment's bare-letter sequence as a substring of lemma and
     grafts its length marks onto the matching span, but only when that bare
     sequence occurs exactly once - an ambiguous or coincidental match (e.g.
@@ -563,15 +579,27 @@ def render_etymology_html(info):
 
 def load_wiktionary_etymology():
     """Loads the word -> [etymology_text, ...] lookup built by
-    fetch_wiktionary_etymology.py from the shared
+    fetch_wiktionary_data.py from the shared
     ../wiktionary-grc-data/grc_entries.jsonl extract. Optional, like
     load_grammar_word_index() below - the main build still works without it,
     just without the Wiktionary etymology line."""
     if not os.path.exists(WIKTIONARY_ETYMOLOGY_PATH):
         print(f"⚠️  {WIKTIONARY_ETYMOLOGY_PATH} not found - skipping Wiktionary etymology "
-              f"(run scripts/fetch_wiktionary_etymology.py first to enable it).")
+              f"(run scripts/fetch_wiktionary_data.py first to enable it).")
         return {}
     with open(WIKTIONARY_ETYMOLOGY_PATH, encoding='utf-8') as f:
+        return json.load(f)
+
+def load_wiktionary_vowel_length():
+    """Loads the word -> canonical_form_with_marks lookup built by
+    fetch_wiktionary_data.py - a third, independent source of dichrona length
+    (see merge_vowel_length_from_reference), used only as a fallback where
+    LSJ's own orth_orig/pron data has nothing. Optional, same as above."""
+    if not os.path.exists(WIKTIONARY_VOWEL_LENGTH_PATH):
+        print(f"⚠️  {WIKTIONARY_VOWEL_LENGTH_PATH} not found - skipping Wiktionary vowel "
+              f"length fallback (run scripts/fetch_wiktionary_data.py first to enable it).")
+        return {}
+    with open(WIKTIONARY_VOWEL_LENGTH_PATH, encoding='utf-8') as f:
         return json.load(f)
 
 def render_wiktionary_etymology_html(etyms):
@@ -760,6 +788,7 @@ def build_unabridged_dictionary():
 
     grammar_word_index = load_grammar_word_index()
     wiktionary_etymology = load_wiktionary_etymology()
+    wiktionary_vowel_length = load_wiktionary_vowel_length()
 
     if not os.path.exists(TEI_XML_DIR):
         print(f"❌ Error: Target repository path missing at {TEI_XML_DIR}")
@@ -811,12 +840,18 @@ def build_unabridged_dictionary():
                 if not raw_lemma or raw_lemma.replace('-', '').isdigit() or "Preface" in raw_lemma:
                     continue
 
-                # LSJ's own recorded length for the dichrona α ι υ, from two
-                # independent places in the source (see merge_lsj_vowel_length
-                # and merge_lsj_pron_length) - used for the displayed headword
-                # and the IPA line, but NOT for lookup/search, which stays
-                # based on the plain (length-unmarked) raw_lemma throughout.
-                display_lemma = merge_lsj_vowel_length(
+                # Dichrona (α ι υ) length for the displayed headword and the
+                # IPA line - NOT for lookup/search, which stays based on the
+                # plain (length-unmarked) raw_lemma throughout. Three
+                # independent sources, checked in priority order (each only
+                # fills in vowels the previous ones left unmarked - see
+                # _length_mark_or_none): LSJ's own head/orth_orig attribute,
+                # then LSJ's <pron> bracket (a second, independent place LSJ
+                # itself records length), then Wiktionary's canonical form as
+                # a fallback for headwords LSJ doesn't mark at all (e.g.
+                # λύω/θύω "to sacrifice" - genuinely long-υ verbs LSJ just
+                # doesn't bother re-marking).
+                display_lemma = merge_vowel_length_from_reference(
                     raw_lemma, head_node.get('orth_orig'))
                 head_parent = parent_map.get(head_node)
                 if head_parent is not None:
@@ -829,6 +864,9 @@ def build_unabridged_dictionary():
                             m = re.match(r'\[([^\]]*)\]$', pron_text)
                             if m:
                                 display_lemma = merge_lsj_pron_length(display_lemma, m.group(1))
+                wikt_canonical = wiktionary_vowel_length.get(strip_all_greek_accents(raw_lemma).lower())
+                if wikt_canonical:
+                    display_lemma = merge_vowel_length_from_reference(display_lemma, wikt_canonical)
 
                 lookup_lemma = strip_greek_vowel_lengths(raw_lemma)
                 safe_title = sanitize_apple_key(lookup_lemma)
@@ -933,20 +971,17 @@ def build_unabridged_dictionary():
                 out_xml.write(f'        <h1 class="entry-lemma">{html.escape(display_lemma, quote=False)}</h1>\n')
 
                 # Reconstructed Classical Attic pronunciation (Vox Graeca), IPA -
-                # display_lemma carries LSJ's own recorded α/ι/υ length where
-                # available, so a dichronon transcribes as genuinely long/short
-                # instead of always defaulting to short (see
-                # merge_lsj_vowel_length).
+                # display_lemma carries recorded α/ι/υ length where available
+                # (LSJ's own data first, Wiktionary as a fallback), so a
+                # dichronon transcribes as genuinely long/short instead of
+                # always defaulting to short (see
+                # merge_vowel_length_from_reference).
                 ipa = greek_to_ipa(display_lemma)
                 if ipa:
                     out_xml.write(f'        <div class="pronunciation-line"><span class="ipa">{html.escape(ipa, quote=False)}</span></div>\n')
 
                 grammar_info = extract_grammar_and_etymology(get_preamble_children(entry, head_node))
                 out_xml.write(render_grammar_html(grammar_info))
-                out_xml.write(render_etymology_html(grammar_info))
-
-                wikt_etyms = wiktionary_etymology.get(strip_all_greek_accents(raw_lemma).lower(), [])
-                out_xml.write(render_wiktionary_etymology_html(wikt_etyms))
 
                 grammar_refs = grammar_word_index.get(strip_all_greek_accents(raw_lemma).lower(), [])
                 if len(grammar_refs) >= GRAMMAR_CROSSREF_MIN_REFS:
@@ -1116,6 +1151,13 @@ def build_unabridged_dictionary():
                     
                 out_xml.write(f'{definitions_html}\n')
                 out_xml.write('        </div>\n')
+
+                # Etymology sits just above morphology (declension/principal
+                # parts), not up near the headword - it's background on where
+                # the word comes from, read after the definitions, not before.
+                out_xml.write(render_etymology_html(grammar_info))
+                wikt_etyms = wiktionary_etymology.get(strip_all_greek_accents(raw_lemma).lower(), [])
+                out_xml.write(render_wiktionary_etymology_html(wikt_etyms))
 
                 # Defined unconditionally (not just under the noun/adj branch
                 # below) so the synthetic comparative/superlative entries
