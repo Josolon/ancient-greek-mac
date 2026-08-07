@@ -35,7 +35,13 @@ The LSJ lexicon data (`data/lsj_unicode/`) and derived morphology databases are 
 **Creative Commons Attribution-ShareAlike 4.0 International**
 https://creativecommons.org/licenses/by-sa/4.0/
 
-**Attribution:** Chicago Digital Classics, Liddell–Scott–Jones Lexicon, via the Perseus Digital Library project.
+**Attribution:** Liddell–Scott–Jones Greek-English Lexicon — **Perseus Tufts and Helma Dik/Logeion**.
+
+The LSJ text used here is [LSJLogeion](https://github.com/helmadik/LSJLogeion), the heavily
+edited Chicago/Logeion version of the Perseus LSJ: all Greek converted to Unicode, many
+entries split or merged, and continuous corrections against the print text and the
+Supplements. That project asks specifically that users "credit Perseus Tufts *and* Helma
+Dik/Logeion" — please carry both names through into any redistribution.
 
 **You are free to:**
 - Share — copy and redistribute the material
@@ -53,6 +59,6 @@ See `data/lsj_unicode/LICENSE.md` for full details.
 
 When distributing this dictionary:
 1. Include/reference both licenses
-2. Attribute the Chicago LSJ source
+2. Attribute the LSJ source to **both Perseus Tufts and Helma Dik/Logeion**
 3. Any derivative works using the LSJ data must also be CC BY-SA 4.0
 

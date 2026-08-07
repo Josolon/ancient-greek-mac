@@ -9,7 +9,7 @@ A custom `.dictionary` plugin for the native macOS Dictionary app and system-wid
 
 ## ✨ Features
 
-* **117k Unabridged LSJ Entries:** Full Chicago TEI-XML LSJ data compiled into the macOS `.dictionary` format.
+* **117k Unabridged LSJ Entries:** The full LSJLogeion TEI-XML text (Perseus LSJ as edited by Helma Dik/Logeion) compiled into the macOS `.dictionary` format.
 * **System Integration:** Works natively with macOS "Look Up" (Force Click or Three-Finger Tap on any word).
 * **Morphology Tables:** Declensions and principal parts always visible (no folds). Declension tables show all cases and numbers; principal parts organized in classical order (Present → Future → Aorist → Perfect).
 * **Hierarchical Sense Indentation:** Major senses (I, II, III…) styled as visual subheadings; sub-senses indented with subtle left borders for visual hierarchy.
@@ -47,7 +47,7 @@ cd src && make install
 ```
 
 #### **`scripts/build_unabridged_xml.py`** — Full LSJ (117k entries from TEI-XML)
-Compiles the complete unabridged Chicago TEI-XML LSJ corpus. This is the official v1.0.0+ build.
+Compiles the complete unabridged LSJLogeion TEI-XML corpus. This is the official v1.0.0+ build.
 
 ```bash
 python3 scripts/build_unabridged_xml.py
@@ -112,7 +112,7 @@ All visual presentation is controlled by `src/GreekDictionary.css`. The styleshe
 ```
 ancient-greek-mac/
 ├── data/
-│   ├── lsj_unicode/           # Chicago TEI-XML LSJ source (86 files)
+│   ├── lsj_unicode/           # LSJLogeion TEI-XML source (86 files)
 │   ├── lsj.db                 # SQLite LSJ entries [gitignored]
 │   ├── morph.db                # SQLite morphology data [gitignored]
 │   ├── smyth_html/             # Smyth grammar HTML chapters [gitignored, fetched]
@@ -141,7 +141,7 @@ ancient-greek-mac/
 
 ## 📚 Data Sources
 
-* **LSJ Lexicon:** Complete Liddell–Scott–Jones ancient Greek dictionary, provided by the [Chicago Digital Classics](https://github.com/perseids-project/morphology) project in TEI-XML format.
+* **LSJ Lexicon:** Complete Liddell–Scott–Jones ancient Greek dictionary, from [LSJLogeion](https://github.com/helmadik/LSJLogeion) — the heavily edited Chicago/Logeion version of the Perseus LSJ, with all Greek converted to Unicode, many entries split or merged, and ongoing corrections against the print text and the Supplements. **Please credit both Perseus Tufts and Helma Dik/Logeion**, as that project asks. Editorial work by [Helma Dik](https://github.com/helmadik) and contributors; original TEI-XML from the [Perseus Digital Library](https://www.perseus.tufts.edu/), Tufts University.
 * **Morphology:** Ancient Greek inflectional morphology from [Morpheus](https://github.com/perseids-project/morphology), integrated for noun declension and verb principal parts tables.
 * **Grammar Reference:** Herbert Weir Smyth, *A Greek Grammar for Colleges* (1920), via [PerseusDL/sg_reader](https://github.com/PerseusDL/sg_reader); William Watson Goodwin, *Syntax of the Moods and Tenses of the Greek Verb* (1889), via the [Perseus Digital Library](https://www.perseus.tufts.edu/). Both public domain, freely redistributable with attribution per Perseus's standard text-reuse policy.
 * **Pronunciation:** Reconstructed Classical Attic phonology per W. Sidney Allen, *Vox Graeca* (3rd ed., 1987).
@@ -169,7 +169,7 @@ To contribute:
 This project uses a **dual-license model**:
 
 - **Code** (Python scripts, CSS, Makefile): [MIT License](LICENSE)
-- **Data** (LSJ lexicon, morphology): [Creative Commons Attribution-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0/) (per Chicago Digital Classics)
+- **Data** (LSJ lexicon, morphology): [Creative Commons Attribution-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0/) — attribution to **Perseus Tufts and Helma Dik/Logeion** ([LSJLogeion](https://github.com/helmadik/LSJLogeion)), as that project requests
 - **Grammar Reference data** (Smyth, Goodwin): public domain texts, redistributed per the Perseus Digital Library's standard policy - freely distributable with attribution to Perseus, National Endowment for the Humanities funding, and the original authors.
 - **Wiktionary etymology data:** CC BY-SA 4.0 / GFDL, per [Wiktionary](https://en.wiktionary.org/)'s own dual licensing.
 
@@ -178,6 +178,7 @@ See [LICENSE](LICENSE) for full details. When distributing this dictionary, all 
 ## 🙏 Acknowledgments
 
 * **Liddell, Scott, Jones (LSJ):** The foundational ancient Greek lexicon.
+* **Helma Dik and the Logeion project (University of Chicago):** For [LSJLogeion](https://github.com/helmadik/LSJLogeion) — the years of editorial work behind the text this dictionary is built on: the Unicode conversion, entries split and merged, and continuous corrections against the print edition and its Supplements.
 * **Herbert Weir Smyth** and **William Watson Goodwin:** Authors of the reference grammars behind the Grammar Reference dictionary and the Grammar & Syntax cross-references.
 * **Perseus Digital Library / Perseids:** For TEI-XML source data, morphology tooling, and the Smyth/Goodwin digitizations (funded in part by the National Endowment for the Humanities).
 * **W. Sidney Allen:** *Vox Graeca*, the reconstructed-pronunciation reference this dictionary's IPA transcriptions follow.
