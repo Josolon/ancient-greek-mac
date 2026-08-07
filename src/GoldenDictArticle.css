@@ -1,0 +1,418 @@
+/* GoldenDictArticle.css - shipped to users as article-style.css
+ *
+ * StarDict has no stylesheet slot, so GoldenDict takes article styling from a
+ * file in its own config directory. This merges GreekDictionary.css and
+ * GrammarReference.css and adapts them for the three ways GoldenDict differs
+ * from Dictionary.app:
+ *
+ *   1. Fonts. -apple-system and New Athena Unicode do not exist on Linux or
+ *      Windows, so every stack falls through to fonts those platforms actually
+ *      ship - DejaVu Serif (Linux) and Palatino Linotype (Windows) both have
+ *      real polytonic Greek coverage.
+ *   2. Dark mode. GoldenDict-ng has a dark theme; the Apple CSS assumes a white
+ *      background throughout and goes unreadable under it.
+ *   3. Popup width. Scan Popup is narrow, and the deepest sense indent (80px)
+ *      eats a quarter of it, so indentation collapses below 520px.
+ *
+ * Everything is scoped to .agk-article - the wrapper build_stardict.py puts
+ * around each entry - so other dictionaries in the same GoldenDict install are
+ * left alone.
+ */
+
+.agk-article {
+    --agk-text: #1a1a1a;
+    --agk-muted: #444;
+    --agk-faint: #666;
+    --agk-heading: #1a1a4e;
+    --agk-accent: #2a4a9a;
+    --agk-greek: #002266;
+    --agk-sense: #8b1111;
+    --agk-sense-major: #6b0000;
+    --agk-rule: #c0c8e0;
+    --agk-border: #c8d4ee;
+    --agk-panel: #f7f9ff;
+    --agk-chip: #edf1fb;
+    --agk-hairline: #eef0f8;
+
+    --agk-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+              "DejaVu Sans", Arial, sans-serif;
+    --agk-greek-font: "New Athena Unicode", "Noto Serif", "Gentium Plus",
+                      "Palatino Linotype", "DejaVu Serif", Georgia, serif;
+
+    font-family: var(--agk-ui);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--agk-text);
+}
+
+@media (prefers-color-scheme: dark) {
+    .agk-article {
+        --agk-text: #e6e6ea;
+        --agk-muted: #c2c2cc;
+        --agk-faint: #9d9daa;
+        --agk-heading: #b9c4ee;
+        --agk-accent: #8fa8e8;
+        --agk-greek: #a8c0ff;
+        --agk-sense: #e08f8f;
+        --agk-sense-major: #e8a0a0;
+        --agk-rule: #3a3f55;
+        --agk-border: #3a4260;
+        --agk-panel: #1c2030;
+        --agk-chip: #232840;
+        --agk-hairline: #262b3d;
+    }
+}
+
+/* ===================== Dictionary entries ===================== */
+
+.agk-article h1.entry-lemma {
+    font-family: var(--agk-greek-font);
+    font-size: 1.6em;
+    font-weight: bold;
+    color: var(--agk-heading);
+    margin: 0 0 6px 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--agk-rule);
+    letter-spacing: 0.02em;
+}
+
+.agk-article div.definition { margin: 6px 0 12px 0; padding-left: 4px; }
+
+.agk-article div.sense { margin: 3px 0; line-height: 1.55em; }
+
+.agk-article div.case-governance-header {
+    margin: 12px 0 8px 0;
+    padding: 6px 8px;
+    background: var(--agk-panel);
+    border-left: 4px solid var(--agk-accent);
+    font-weight: 600;
+    font-style: italic;
+    color: var(--agk-muted);
+    font-size: 0.95em;
+    line-height: 1.4;
+}
+
+.agk-article div.sense-major {
+    margin: 10px 0 2px 0;
+    padding-top: 5px;
+    border-top: 1px solid var(--agk-rule);
+}
+
+.agk-article div.sense-major .sense-num {
+    font-size: 1.05em;
+    font-weight: bold;
+    color: var(--agk-sense-major);
+}
+
+.agk-article div.sense-depth-0 { margin-top: 5px; padding-left: 0; }
+.agk-article div.sense-depth-1 { border-left: 2px solid var(--agk-border); padding-left: 20px; margin-top: 4px; }
+.agk-article div.sense-depth-2 { border-left: 2px solid var(--agk-border); padding-left: 40px; margin-top: 3px; }
+.agk-article div.sense-depth-3 { border-left: 1px solid var(--agk-hairline); padding-left: 60px; margin-top: 2px; }
+.agk-article div.sense-depth-4 { border-left: 1px solid var(--agk-hairline); padding-left: 80px; margin-top: 2px; }
+
+.agk-article span.sense-num {
+    font-weight: bold;
+    color: var(--agk-sense);
+    font-size: 0.98em;
+    margin-right: 2px;
+}
+
+.agk-article span.sense-body { color: var(--agk-text); }
+
+.agk-article b.gk-word {
+    color: var(--agk-greek);
+    font-weight: bold;
+    font-size: 1.04em;
+    font-family: var(--agk-greek-font);
+}
+
+.agk-article span.citation { color: var(--agk-faint); font-size: 0.9em; }
+
+.agk-article div.sense-overview {
+    margin: 6px 0 10px 0;
+    padding: 6px 10px;
+    background: var(--agk-chip);
+    border: 1px solid var(--agk-border);
+    border-radius: 4px;
+    line-height: 1.9;
+    color: var(--agk-muted);
+    font-size: 0.92em;
+}
+
+.agk-article span.overview-item { display: inline; margin-right: 10px; }
+
+.agk-article div.pronunciation-line {
+    margin: 0 0 6px 0;
+    font-size: 0.95em;
+    color: var(--agk-faint);
+}
+
+.agk-article div.pronunciation-line .ipa {
+    font-family: "New Athena Unicode", "Doulos SIL", "Charis SIL", "Gentium Plus",
+                 "DejaVu Serif", "Noto Serif", Georgia, serif;
+    font-style: normal;
+    letter-spacing: 0.01em;
+}
+
+.agk-article div.entry-preamble {
+    margin: 2px 0 8px 0;
+    color: var(--agk-muted);
+    font-style: italic;
+    font-size: 0.95em;
+}
+
+.agk-article div.entry-grammar { margin: 2px 0 4px 0; }
+
+.agk-article span.gram-badge {
+    display: inline-block;
+    margin: 0 6px 4px 0;
+    padding: 1px 8px;
+    background-color: var(--agk-chip);
+    border: 1px solid var(--agk-border);
+    border-radius: 10px;
+    color: var(--agk-accent);
+    font-size: 0.82em;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.agk-article span.sense-gram-badge {
+    color: var(--agk-accent);
+    font-size: 0.85em;
+    font-weight: 600;
+    font-style: italic;
+    margin-right: 4px;
+}
+
+.agk-article div.entry-degree-forms,
+.agk-article div.entry-etymology,
+.agk-article div.entry-grammar-crossref {
+    margin: 2px 0 8px 0;
+    color: var(--agk-muted);
+    font-size: 0.92em;
+}
+
+.agk-article span.degree-label,
+.agk-article span.etym-label {
+    font-weight: 600;
+    color: var(--agk-faint);
+    margin-right: 4px;
+}
+
+/* Wiktionary etymology - kept visually distinct from LSJ's own cross-reference,
+   since it is an independent source with its own coverage caveats. */
+.agk-article div.entry-etymology-wiktionary {
+    margin: 2px 0 8px 0;
+    padding: 6px 10px;
+    background-color: #f7f5f0;
+    border-left: 3px solid #b8a888;
+    font-size: 0.9em;
+    color: #443;
+}
+
+@media (prefers-color-scheme: dark) {
+    .agk-article div.entry-etymology-wiktionary {
+        background-color: #2a2620;
+        border-left-color: #7a6d52;
+        color: #d8d2c4;
+    }
+}
+
+.agk-article div.entry-etymology-wiktionary p { margin: 4px 0; }
+.agk-article div.entry-etymology-wiktionary p:first-of-type { margin-top: 2px; }
+.agk-article div.entry-etymology-wiktionary p:last-of-type { margin-bottom: 2px; }
+
+.agk-article div.morph-section {
+    margin-top: 14px;
+    background-color: var(--agk-panel);
+    border: 1px solid var(--agk-border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.agk-article p.morph-label {
+    margin: 0;
+    padding: 5px 10px;
+    font-size: 0.86em;
+    font-weight: 600;
+    color: var(--agk-accent);
+    background-color: var(--agk-chip);
+    border-bottom: 1px solid var(--agk-border);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.agk-article .morph-secondary-header td {
+    font-size: 0.82em;
+    font-style: italic;
+    color: var(--agk-faint);
+    padding: 3px 8px;
+    background-color: var(--agk-chip);
+    border-top: 1px solid var(--agk-hairline);
+    border-bottom: 1px dashed var(--agk-hairline);
+}
+
+.agk-article .morphology-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.84em;
+    margin: 0;
+}
+
+.agk-article .morphology-table th {
+    background-color: var(--agk-chip);
+    color: var(--agk-accent);
+    font-weight: 600;
+    padding: 5px 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--agk-border);
+}
+
+.agk-article .morphology-table td {
+    padding: 4px 8px;
+    vertical-align: top;
+    border-bottom: 1px solid var(--agk-hairline);
+    color: var(--agk-text);
+    font-family: var(--agk-greek-font);
+}
+
+.agk-article .morphology-table td.case-label {
+    font-family: var(--agk-ui);
+    font-weight: 600;
+    color: var(--agk-accent);
+    font-size: 0.95em;
+    white-space: nowrap;
+    width: 90px;
+}
+
+.agk-article .morphology-table tr:last-child td { border-bottom: none; }
+.agk-article .morphology-table tr:nth-child(even) td { background-color: var(--agk-panel); }
+
+/* ===================== Grammar reference ===================== */
+
+.agk-article h1.grammar-heading {
+    font-family: var(--agk-greek-font);
+    font-size: 1.5em;
+    font-weight: bold;
+    color: var(--agk-heading);
+    margin: 0 0 4px 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--agk-rule);
+}
+
+.agk-article div.grammar-citation {
+    color: var(--agk-accent);
+    font-size: 0.85em;
+    font-weight: 600;
+    margin-bottom: 10px;
+    letter-spacing: 0.02em;
+}
+
+.agk-article div.grammar-para { font-size: 1em; line-height: 1.65; margin: 0 0 14px 0; }
+.agk-article div.grammar-para:last-child { margin-bottom: 0; }
+
+.agk-article span.para-num {
+    display: inline-block;
+    margin-right: 6px;
+    padding: 1px 7px;
+    background-color: var(--agk-chip);
+    border: 1px solid var(--agk-border);
+    border-radius: 10px;
+    color: var(--agk-accent);
+    font-size: 0.8em;
+    font-weight: 700;
+    font-family: var(--agk-ui);
+    vertical-align: 1px;
+}
+
+.agk-article i.grammar-gloss { color: var(--agk-muted); font-style: italic; }
+
+.agk-article table.grammar-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92em;
+    margin: 8px 0 12px 0;
+    background-color: var(--agk-panel);
+    border: 1px solid var(--agk-border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.agk-article table.grammar-table td {
+    padding: 4px 10px;
+    vertical-align: top;
+    border-bottom: 1px solid var(--agk-hairline);
+    font-family: var(--agk-greek-font);
+}
+
+.agk-article table.grammar-table tr:last-child td { border-bottom: none; }
+.agk-article table.grammar-table tr:nth-child(even) td { background-color: var(--agk-chip); }
+
+.agk-article table.pron-table th {
+    text-align: left;
+    padding: 4px 10px;
+    font-size: 0.85em;
+    color: var(--agk-accent);
+    background-color: var(--agk-chip);
+}
+
+.agk-article b.pron-lang {
+    display: inline-block;
+    min-width: 1.6em;
+    font-size: 0.78em;
+    font-weight: 700;
+    color: var(--agk-accent);
+    font-family: var(--agk-ui);
+}
+
+.agk-article b.pron-best {
+    font-weight: 800;
+    color: var(--agk-greek);
+    text-decoration: underline;
+    text-decoration-color: var(--agk-border);
+    text-decoration-thickness: 2px;
+}
+
+.agk-article span.pron-none { color: var(--agk-faint); }
+
+.agk-article div.pron-note {
+    margin-top: 3px;
+    font-size: 0.85em;
+    font-style: italic;
+    color: var(--agk-faint);
+}
+
+/* ===================== Cross-dictionary links ===================== */
+
+.agk-article a[href^="bword:"] {
+    color: var(--agk-accent);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--agk-accent);
+}
+
+.agk-article a[href^="bword:"]:hover {
+    border-bottom-style: solid;
+}
+
+/* ===================== Scan Popup / narrow windows ===================== */
+
+/* The popup is typically 400-500px. Full sense indentation would spend a
+   quarter of that on whitespace, and wide paradigm tables force sideways
+   scrolling, so both are reined in here rather than in the entry markup. */
+@media (max-width: 520px) {
+    .agk-article div.sense-depth-1 { padding-left: 8px; }
+    .agk-article div.sense-depth-2 { padding-left: 16px; }
+    .agk-article div.sense-depth-3 { padding-left: 24px; }
+    .agk-article div.sense-depth-4 { padding-left: 32px; }
+
+    .agk-article h1.entry-lemma { font-size: 1.35em; }
+    .agk-article div.sense-overview { line-height: 1.6; }
+
+    .agk-article table.grammar-table,
+    .agk-article .morphology-table { font-size: 0.8em; }
+
+    .agk-article table.grammar-table td,
+    .agk-article .morphology-table td { padding: 3px 5px; }
+
+    .agk-article .morphology-table td.case-label { width: auto; }
+}

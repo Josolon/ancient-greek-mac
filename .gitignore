@@ -263,3 +263,5 @@ data/wiktionary_vowel_length.json
 
 # Ignore generated grammar reference dictionary source XML
 src/GrammarReference.xml
+# GoldenDict (Linux/Windows) build output
+dist/

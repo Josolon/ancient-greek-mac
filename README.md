@@ -1,16 +1,24 @@
-# 🏛️ macOS Ancient Greek Dictionary
+# 🏛️ Ancient Greek Dictionary
 
 ![Ancient Greek Dictionary working preview](assets/preview.png)
 ![Ancient Greek Dictionary working preview](assets/preview1.png)
 
-A custom `.dictionary` plugin for the native macOS Dictionary app and system-wide "Look Up" feature. This dictionary combines the **complete Liddell–Scott–Jones (LSJ) lexicon** (117,129 unabridged entries) with beautifully styled noun declensions and verb principal parts.
+A dictionary combining the **complete Liddell–Scott–Jones (LSJ) lexicon** (117,129 unabridged entries) with beautifully styled noun declensions and verb principal parts.
+
+It ships in two forms, from the same source data:
+
+* **macOS** — a `.dictionary` plugin for the native Dictionary app and the system-wide "Look Up" feature.
+* **Linux & Windows** — a StarDict build for [GoldenDict-ng](https://xiaoyifang.github.io/goldendict-ng/), whose **Scan Popup** gives the same select-a-word-and-look-it-up workflow. See [docs/GOLDENDICT.md](docs/GOLDENDICT.md).
+
+**v1.5.0** — Linux and Windows support via StarDict/GoldenDict-ng, built from the same XML as the macOS bundles: all 122,312 entries and all 4,406,456 indexed inflected forms, so selecting `ἐποίησεν` in a text resolves to `ποιέω` exactly as it does on macOS. Cross-dictionary grammar links are rewritten from Apple's `x-dictionary:` scheme to `bword:`, and the stylesheet is re-cut for GoldenDict with a dark-mode variant, cross-platform font stacks, and collapsed sense indentation at popup width.
 
 **v1.4.0** — Reconstructed Classical Attic pronunciation (IPA, per W. Sidney Allen's *Vox Graeca*) on every LSJ entry, with a cross-language Pronunciation Guide reference entry (English/German/French/Italian/Spanish/Modern Greek/Icelandic/Latin); vowel length (macron/breve) shown directly on headwords, from three independent sources (LSJ's `orth_orig`, LSJ's `pron` brackets, and Wiktionary's conjugation tables); clickable cross-references between the two dictionaries; and an experimental Wiktionary etymology integration (**work in progress, ~12% coverage** - see Data Sources), shown alongside LSJ's own etymology just above the morphology tables. Also corrects diacritic stacking order (macron under the accent; breathing before accent) and properly credits Helma Dik/Logeion for the LSJ text this is built on.
 
 ## ✨ Features
 
 * **117k Unabridged LSJ Entries:** The full LSJLogeion TEI-XML text (Perseus LSJ as edited by Helma Dik/Logeion) compiled into the macOS `.dictionary` format.
-* **System Integration:** Works natively with macOS "Look Up" (Force Click or Three-Finger Tap on any word).
+* **System Integration:** Works natively with macOS "Look Up" (Force Click or Three-Finger Tap on any word), and with GoldenDict's Scan Popup on Linux and Windows.
+* **Cross-platform:** The same data builds to both Apple's `.dictionary` format and StarDict, from one set of scripts. Nothing is macOS-only except the packaging step.
 * **Morphology Tables:** Declensions and principal parts always visible (no folds). Declension tables show all cases and numbers; principal parts organized in classical order (Present → Future → Aorist → Perfect).
 * **Hierarchical Sense Indentation:** Major senses (I, II, III…) styled as visual subheadings; sub-senses indented with subtle left borders for visual hierarchy.
 * **Grammar & Etymology:** Part of speech, gender, declension class, and dialect/voice/comparative/diminutive labels are pulled out of LSJ's own TEI tags into a labeled badge row, both at the entry level and on individual senses (e.g. a sense marked "as Subst." shows a `substantive` badge right there). A bare "Related to: X" etymology line surfaces LSJ's own cross-reference where the source has one, and (where available - see Data Sources) a fuller Wiktionary etymology paragraph is shown alongside it.
@@ -21,11 +29,21 @@ A custom `.dictionary` plugin for the native macOS Dictionary app and system-wid
 
 ## 📦 Installation (For End Users)
 
-1. Download the latest release from the [Releases](https://github.com/Josolon/ancient-greek-mac/releases) page.
+### macOS
+
+1. Download `AncientGreek.dictionary.zip` from the [Releases](https://github.com/Josolon/ancient-greek-mac/releases) page.
 2. Unzip the `.zip` file to get `AncientGreek.dictionary` and `GreekGrammarReference.dictionary`.
 3. Open Finder, press `Cmd + Shift + G`, and navigate to `~/Library/Dictionaries/`.
 4. Drag and drop both `.dictionary` folders into this location.
 5. Open the macOS **Dictionary app**, go to **Settings**, and enable "Ancient Greek (LSJ)" and/or "Ancient Greek Grammar (Smyth & Goodwin)".
+
+### Linux & Windows
+
+1. Install [GoldenDict-ng](https://xiaoyifang.github.io/goldendict-ng/) (the maintained fork, not the original GoldenDict).
+2. Download `AncientGreek-GoldenDict-<version>.zip` and unzip it somewhere permanent.
+3. In GoldenDict: **Edit → Dictionaries → Sources → Files → Add…** and select the unzipped folder.
+4. Copy `article-style.css` into GoldenDict's config folder — see [docs/GOLDENDICT.md](docs/GOLDENDICT.md) for the exact path and the non-destructive addon-style method.
+5. Enable **Scan Popup** for select-anywhere lookup. On Wayland this needs X11 mode (`QT_QPA_PLATFORM=xcb`); the full explanation is in the same document.
 
 ## 🛠️ Building from Source
 
@@ -73,6 +91,17 @@ python3 scripts/build_unabridged_xml.py
 cd src && make install
 ```
 
+#### **`scripts/build_stardict.py`** — StarDict build for Linux/Windows (GoldenDict-ng)
+Converts the same generated Apple XML into StarDict (`.ifo`/`.idx`/`.dict`/`.syn`). Streams the ~450 MB `GreekDictionary.xml` rather than loading it, rewrites `x-dictionary:` cross-dictionary links to `bword:`, and emits every `<d:index>` as a StarDict synonym so the full Morpheus morphology stays searchable. `scripts/verify_stardict.py` reads a built set back independently of the writer and checks sort order, offset integrity and UTF-8 validity. `scripts/package_goldendict.sh` runs both plus the stylesheet and docs into a release zip.
+
+```bash
+python3 scripts/build_unabridged_xml.py
+python3 scripts/build_grammar_reference.py
+./scripts/package_goldendict.sh v1.5.0
+```
+
+Install `dictzip` first (`brew install dictzip`, or your distro's package) if you want the compressed `.dict.dz` — roughly a third of the size with random access preserved. It is picked up automatically when present.
+
 ### Full Build Instructions
 
 1. Clone this repository:
@@ -107,6 +136,9 @@ All visual presentation is controlled by `src/GreekDictionary.css`. The styleshe
 - Major sense (Roman numeral) subheadings with separator lines
 - Morphology table styling (declensions, principal parts)
 - Greek text (`gk-word`) and citation (`citation`) highlighting
+
+For the GoldenDict build, `src/GoldenDictArticle.css` merges the two macOS stylesheets and adapts them: cross-platform font stacks (DejaVu Serif on Linux, Palatino Linotype on Windows — both have real polytonic coverage), a `prefers-color-scheme` dark variant, and collapsed sense indentation below 520px so deep LSJ entries stay readable at Scan Popup width. Everything is scoped to `.agk-article` so it cannot disturb a user's other dictionaries.
+
 ## 📁 Project Structure
 
 ```
@@ -126,16 +158,23 @@ ancient-greek-mac/
 │   ├── fetch_grammar_sources.py # Vendors Smyth + Goodwin from Perseus
 │   ├── build_grammar_reference.py # Grammar Reference dictionary + word index builder
 │   ├── fetch_wiktionary_data.py # Filters the shared Wiktionary extract to the two data/wiktionary_*.json lookups
+│   ├── build_stardict.py      # Apple XML → StarDict, for GoldenDict-ng (Linux/Windows)
+│   ├── verify_stardict.py     # Independent reader/validator for a built StarDict set
+│   ├── package_goldendict.sh  # Builds + verifies + zips the GoldenDict release
 │   └── phonology.py           # Reconstructed-Attic IPA transcription engine
 ├── src/
 │   ├── GreekDictionary.xml    # Generated LSJ dictionary source [gitignored]
-│   ├── GreekDictionary.css    # LSJ dictionary styling
+│   ├── GreekDictionary.css    # LSJ dictionary styling (macOS)
 │   ├── GreekDictionary.plist  # LSJ Apple Dictionary metadata
 │   ├── GrammarReference.xml   # Generated Grammar Reference source [gitignored]
-│   ├── GrammarReference.css   # Grammar Reference styling
+│   ├── GrammarReference.css   # Grammar Reference styling (macOS)
 │   ├── GrammarReference.plist # Grammar Reference Apple Dictionary metadata
+│   ├── GoldenDictArticle.css  # Both stylesheets merged + adapted, ships as article-style.css
 │   ├── Makefile               # Build rules for both bundles
 │   └── objects/               # Build artifacts [gitignored]
+├── docs/
+│   └── GOLDENDICT.md          # Linux/Windows install, Scan Popup, Wayland caveat
+├── dist/                      # StarDict build output + release zip [gitignored]
 └── README.md
 ```
 
