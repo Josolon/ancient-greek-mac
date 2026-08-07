@@ -5,7 +5,7 @@
 
 A custom `.dictionary` plugin for the native macOS Dictionary app and system-wide "Look Up" feature. This dictionary combines the **complete Liddell–Scott–Jones (LSJ) lexicon** (117,129 unabridged entries) with beautifully styled noun declensions and verb principal parts.
 
-**v1.3.0** — Reconstructed Classical Attic pronunciation (IPA, per W. Sidney Allen's *Vox Graeca*) on every LSJ entry, with a cross-language Pronunciation Guide reference entry (English/German/French/Italian/Spanish/Modern Greek/Icelandic/Latin); vowel length (macron/breve) now shown directly on headwords wherever LSJ's own source records it; clickable cross-references between the two dictionaries; and an experimental Wiktionary etymology integration (**work in progress, ~12% coverage** - see Data Sources). Builds on v1.2.0's companion Grammar Reference dictionary.
+**v1.4.0** — Reconstructed Classical Attic pronunciation (IPA, per W. Sidney Allen's *Vox Graeca*) on every LSJ entry, with a cross-language Pronunciation Guide reference entry (English/German/French/Italian/Spanish/Modern Greek/Icelandic/Latin); vowel length (macron/breve) shown directly on headwords, from three independent sources (LSJ's `orth_orig`, LSJ's `pron` brackets, and Wiktionary's conjugation tables); clickable cross-references between the two dictionaries; and an experimental Wiktionary etymology integration (**work in progress, ~12% coverage** - see Data Sources), shown alongside LSJ's own etymology just above the morphology tables. Also corrects diacritic stacking order (macron under the accent; breathing before accent) and properly credits Helma Dik/Logeion for the LSJ text this is built on.
 
 ## ✨ Features
 
