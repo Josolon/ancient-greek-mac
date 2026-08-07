@@ -31,7 +31,7 @@ It ships in two forms, from the same source data:
 
 ### macOS
 
-1. Download `AncientGreek.dictionary.zip` from the [Releases](https://github.com/Josolon/ancient-greek-mac/releases) page.
+1. Download `AncientGreek.dictionary.zip` from the [Releases](https://github.com/Josolon/ancient-greek-dictionary/releases) page.
 2. Unzip the `.zip` file to get `AncientGreek.dictionary` and `GreekGrammarReference.dictionary`.
 3. Open Finder, press `Cmd + Shift + G`, and navigate to `~/Library/Dictionaries/`.
 4. Drag and drop both `.dictionary` folders into this location.
@@ -107,8 +107,8 @@ StarDict bodies ship as `.dict.dz`: ordinary gzip plus an `RA` subfield in the h
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/Josolon/ancient-greek-mac.git
-   cd ancient-greek-mac
+   git clone https://github.com/Josolon/ancient-greek-dictionary.git
+   cd ancient-greek-dictionary
    ```
 
 2. (Optional, for grammar cross-references) Fetch and build the grammar reference sources:
@@ -143,7 +143,7 @@ For the GoldenDict build, `src/GoldenDictArticle.css` merges the two macOS style
 ## 📁 Project Structure
 
 ```
-ancient-greek-mac/
+ancient-greek-dictionary/
 ├── data/
 │   ├── lsj_unicode/           # LSJLogeion TEI-XML source (86 files)
 │   ├── lsj.db                 # SQLite LSJ entries [gitignored]
@@ -191,7 +191,7 @@ ancient-greek-mac/
 
 Contributions are welcome! Areas for improvement include:
 
-* **Weird/broken entries:** By far the most valuable contribution. With 117,129 entries auto-generated from TEI-XML, edge cases in the source encoding inevitably slip through (missing headings, mangled overview boxes, garbled citations, etc.). If you spot an entry that looks wrong in the Dictionary app, [open an issue](https://github.com/Josolon/ancient-greek-mac/issues) with the headword and a screenshot/description - or better yet, trace it to the parsing logic in `scripts/build_unabridged_xml.py` and send a PR.
+* **Weird/broken entries:** By far the most valuable contribution. With 117,129 entries auto-generated from TEI-XML, edge cases in the source encoding inevitably slip through (missing headings, mangled overview boxes, garbled citations, etc.). If you spot an entry that looks wrong in the Dictionary app, [open an issue](https://github.com/Josolon/ancient-greek-dictionary/issues) with the headword and a screenshot/description - or better yet, trace it to the parsing logic in `scripts/build_unabridged_xml.py` and send a PR.
 * **Styling:** Enhance CSS for better typography, colors, or responsive layout.
 * **Python scripts:** Optimize parsing, add error handling, or improve how the TEI-XML hierarchy (senses, headings, preambles) is reconstructed.
 * **Documentation:** Expand README, add usage guides, or create troubleshooting FAQs.

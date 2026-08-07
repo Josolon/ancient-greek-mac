@@ -192,7 +192,7 @@ def main() -> int:
     parser.add_argument('--bookname', required=True, help='Title shown in GoldenDict')
     parser.add_argument('--description', default='')
     parser.add_argument('--author', default='Jónatan Sólon')
-    parser.add_argument('--website', default='https://github.com/Josolon/ancient-greek-mac')
+    parser.add_argument('--website', default='https://github.com/Josolon/ancient-greek-dictionary')
     parser.add_argument('--limit', type=int, default=None,
                         help='Only convert the first N entries (for smoke tests)')
     parser.add_argument('--no-dictzip', action='store_true')

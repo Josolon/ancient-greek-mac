@@ -24,7 +24,7 @@ installer from the project's releases page.
 ## 2. Add the dictionaries
 
 1. Download `AncientGreek-GoldenDict-<version>.zip` from the
-   [releases page](https://github.com/Josolon/ancient-greek-mac/releases) and unzip it
+   [releases page](https://github.com/Josolon/ancient-greek-dictionary/releases) and unzip it
    somewhere permanent — the files are read in place, not copied.
 2. In GoldenDict: **Edit → Dictionaries → Sources → Files → Add…**
 3. Select the unzipped `goldendict` folder.
