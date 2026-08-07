@@ -17,6 +17,9 @@ import struct
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import dictzip  # noqa: E402
+
 _ASCII_LOWER = bytes.maketrans(bytes(range(0x41, 0x5B)), bytes(range(0x61, 0x7B)))
 
 
@@ -65,9 +68,19 @@ def main() -> int:
     idx = read_idx(idx_path)
     syn = read_syn(args.base.with_suffix('.syn'))
     dict_path = args.base.with_suffix('.dict')
-    data = dict_path.read_bytes()
+    dz_path = dict_path.with_name(dict_path.name + '.dz')
 
     problems = []
+    reader = None
+    if dz_path.exists():
+        reader = dictzip.DictzipReader(dz_path)
+        data = reader.read(0, reader.size)
+        compression = f'{dz_path.stat().st_size / reader.size:.0%} of raw'
+    elif dict_path.exists():
+        data = dict_path.read_bytes()
+        compression = 'uncompressed'
+    else:
+        raise SystemExit(f'neither {dict_path} nor {dz_path} exists')
 
     if int(ifo['wordcount']) != len(idx):
         problems.append(f"wordcount={ifo['wordcount']} but .idx holds {len(idx)}")
@@ -108,10 +121,21 @@ def main() -> int:
             problems.append(f'synonym {word!r} points at index {target} (out of range)')
             break
 
+    # Random access is the whole point of dictzip, so check that seeking to an
+    # article gives the same bytes as reading the file straight through.
+    if reader is not None:
+        step = max(1, len(idx) // 50)
+        for i in range(0, len(idx), step):
+            word, offset, size = idx[i]
+            if reader.read(offset, size) != data[offset:offset + size]:
+                problems.append(f'dictzip random access disagrees for {word!r}')
+                break
+        reader.close()
+
     print(f"bookname : {ifo.get('bookname')}")
     print(f'entries  : {len(idx):,}')
     print(f'synonyms : {len(syn):,}')
-    print(f'dict     : {len(data):,} bytes ({covered:,} covered by the index)')
+    print(f'dict     : {len(data):,} bytes ({covered:,} covered by the index), {compression}')
 
     if args.dump is not None:
         word, offset, size = idx[args.dump]

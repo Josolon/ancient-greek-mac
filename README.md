@@ -100,7 +100,8 @@ python3 scripts/build_grammar_reference.py
 ./scripts/package_goldendict.sh v1.5.0
 ```
 
-Install `dictzip` first (`brew install dictzip`, or your distro's package) if you want the compressed `.dict.dz` — roughly a third of the size with random access preserved. It is picked up automatically when present.
+#### **`scripts/dictzip.py`** — the .dz container, in pure Python
+StarDict bodies ship as `.dict.dz`: ordinary gzip plus an `RA` subfield in the header listing each chunk's compressed size, so a reader can seek to one article instead of inflating 213 MB. Implemented here rather than shelling out to the `dictzip` binary, which is not separately packaged on macOS (it ships inside dictd) — so the build is reproducible anywhere Python runs. `python3 scripts/dictzip.py` runs a self-test that round-trips several inputs through Python's own `gzip` and confirms every chunk inflates independently, which is the property random access depends on.
 
 ### Full Build Instructions
 

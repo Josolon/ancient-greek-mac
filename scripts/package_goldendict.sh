@@ -5,9 +5,8 @@
 # Prerequisites: src/GreekDictionary.xml and src/GrammarReference.xml already
 # built by build_unabridged_xml.py / build_grammar_reference.py.
 #
-# Install `dictzip` first if you want the compressed .dict.dz (roughly a third
-# of the size, still randomly accessible); build_stardict.py picks it up
-# automatically when present. On macOS: brew install dictzip
+# The .dict is dictzip-compressed by scripts/dictzip.py - no external binary
+# needed, so this produces the same artifact on any machine with Python.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

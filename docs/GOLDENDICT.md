@@ -112,9 +112,10 @@ no identifier to get out of sync.
   accents and case at search time, so you can type `anthropos` or unaccented
   Greek and still land on the entry. Selecting accented text from a real edition
   matches the index directly.
-- **Disk size.** The uncompressed `.dict` is ~213 MB. If `dictzip` is installed
-  when the release is built, it ships compressed instead — roughly a third of the
-  size, with random access preserved.
+- **Disk size.** The LSJ body ships as `.dict.dz` — dictzip, which is ordinary
+  gzip plus a chunk table that lets GoldenDict seek to a single article instead
+  of inflating the whole file. That trades a marginally larger download for a
+  much smaller installed footprint.
 - **Fonts.** The stylesheet falls through to DejaVu Serif on Linux and Palatino
   Linotype on Windows, both of which have real polytonic coverage. Installing
   [New Athena Unicode](https://classicalstudies.org/publications-and-research/new-athena-unicode-font)

@@ -28,12 +28,13 @@ from __future__ import annotations
 
 import argparse
 import re
-import shutil
 import struct
-import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import dictzip  # noqa: E402
 
 D_NS = 'http://www.apple.com/DTDs/DictionaryService-1.0.rng'
 XHTML_NS = 'http://www.w3.org/1999/xhtml'
@@ -152,10 +153,11 @@ def write_stardict(xml_path: Path, out_dir: Path, name: str, bookname: str,
             synf.write(word + b'\0' + struct.pack('>I', position_of[ordinal]))
 
     dict_size = dict_path.stat().st_size
-    compressed = False
-    if use_dictzip and shutil.which('dictzip'):
-        subprocess.run(['dictzip', '-f', str(dict_path)], check=True)
-        compressed = True
+    compressed_size = None
+    if use_dictzip:
+        # compress_file verifies the round trip before it deletes the original.
+        dz_path = dictzip.compress_file(dict_path)
+        compressed_size = dz_path.stat().st_size
 
     ifo_lines = [
         "StarDict's dict ifo file",
@@ -177,7 +179,7 @@ def write_stardict(xml_path: Path, out_dir: Path, name: str, bookname: str,
         'synonyms': len(synonyms),
         'dict_bytes': dict_size,
         'idx_bytes': idx_size,
-        'dictzip': compressed,
+        'dz_bytes': compressed_size,
     }
 
 
@@ -206,12 +208,12 @@ def main() -> int:
         args.description, args.author, args.website,
         limit=args.limit, use_dictzip=not args.no_dictzip,
     )
-    print(
-        f"  {stats['entries']:,} entries, {stats['synonyms']:,} synonyms, "
-        f"dict {stats['dict_bytes'] / 1e6:.1f} MB"
-        + (' (dictzipped)' if stats['dictzip'] else ''),
-        file=sys.stderr,
-    )
+    line = (f"  {stats['entries']:,} entries, {stats['synonyms']:,} synonyms, "
+            f"dict {stats['dict_bytes'] / 1e6:.1f} MB")
+    if stats['dz_bytes']:
+        ratio = stats['dz_bytes'] / stats['dict_bytes']
+        line += f" -> {stats['dz_bytes'] / 1e6:.1f} MB dictzipped ({ratio:.0%})"
+    print(line, file=sys.stderr)
     return 0
 
 

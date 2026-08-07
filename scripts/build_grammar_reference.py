@@ -26,6 +26,73 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 from html.parser import HTMLParser
 
+# Smyth prints about half its section headings in full capitals ("GENITIVE
+# ABSOLUTE"), which is a typographic convention of the print edition rather
+# than part of the text. Left alone it shouts from the results list of every
+# dictionary app. Python's str.title() is not a fix on its own - it capitalises
+# every word, giving "Vowels And Diphthongs" - so headings go through
+# smart_title() below instead.
+_TITLE_SMALL_WORDS = {
+    'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'from', 'in',
+    'into', 'nor', 'of', 'on', 'onto', 'or', 'per', 'the', 'to', 'upon',
+    'via', 'vs', 'with', 'without',
+}
+
+# Words the print edition capitalises for reasons str.title() would undo or
+# mangle, plus grammatical terms conventionally capitalised in the literature.
+_TITLE_FORCE = {
+    'greek': 'Greek', 'attic': 'Attic', 'ionic': 'Ionic', 'doric': 'Doric',
+    'aeolic': 'Aeolic', 'homeric': 'Homeric', 'latin': 'Latin',
+    'english': 'English', 'indo-european': 'Indo-European',
+}
+
+
+def _capitalise_first_letter(word: str) -> str:
+    for i, ch in enumerate(word):
+        if ch.isalpha():
+            return word[:i] + ch.upper() + word[i + 1:]
+    return word
+
+
+def smart_title(text: str) -> str:
+    """Title-case a section heading without shouting or capitalising particles.
+
+    Only recases words that are entirely one case; anything already mixed-case
+    (or containing Greek) is left exactly as the source had it, so forms like
+    "μι-Verbs" survive. The first and last word are always capitalised, per the
+    usual English convention.
+    """
+    tokens = re.split(r'(\s+)', text)
+    words = [i for i, tok in enumerate(tokens) if tok.strip()]
+    if not words:
+        return text
+
+    out = list(tokens)
+    for position, i in enumerate(words):
+        token = tokens[i]
+        letters = [c for c in token if c.isalpha()]
+        # Leave mixed-case and non-Latin tokens untouched.
+        if letters and not (token.isupper() or token.islower()):
+            continue
+        if any(ord(c) > 0x2FF for c in letters):
+            continue
+
+        lowered = token.lower()
+        core = lowered.strip('([{"\'.,;:)]}')
+        if core in _TITLE_FORCE:
+            replacement = lowered.replace(core, _TITLE_FORCE[core])
+        elif core in _TITLE_SMALL_WORDS and position not in (0, len(words) - 1):
+            replacement = lowered
+        else:
+            # Capitalise each hyphen-separated part: "mi-verbs" -> "Mi-Verbs".
+            # Target the first *letter*, not the first character, so a leading
+            # bracket does not swallow the capital: "(stems" -> "(Stems".
+            replacement = '-'.join(_capitalise_first_letter(part)
+                                   for part in lowered.split('-'))
+        out[i] = replacement
+    return ''.join(out)
+
+
 SMYTH_HTML_DIR = 'data/smyth_html/'
 GOODWIN_XML_PATH = 'data/goodwin.xml'
 OUTPUT_XML_PATH = 'src/GrammarReference.xml'
@@ -707,23 +774,26 @@ def build_grammar_reference_dictionary():
         out.write('<d:dictionary xmlns="http://www.w3.org/1999/xhtml" xmlns:d="http://www.apple.com/DTDs/DictionaryService-1.0.rng">\n\n')
         for i, t in enumerate(all_topics):
             entry_id = f'grammar_entry_{i}'
-            title = t['heading']
-            safe_title = title if title else "unknown"
-            out.write(f'    <d:entry id="{entry_id}" d:title="{html_lib.escape(safe_title)}">\n')
+            raw_title = t['heading']
+            # The displayed heading and the entry's own title must agree, or
+            # the results list shows one casing and the article another.
+            title = smart_title(raw_title) if raw_title else "unknown"
+            out.write(f'    <d:entry id="{entry_id}" d:title="{html_lib.escape(title)}">\n')
 
-            index_terms = {title}
-            for part in re.split(r'\.\s+', title):
+            # The source's own casing stays indexed too, so anyone who types or
+            # pastes "GENITIVE ABSOLUTE" still lands on the entry.
+            index_terms = {title, raw_title}
+            for part in re.split(r'\.\s+', raw_title):
                 part = part.strip().rstrip('.')
                 if part:
                     index_terms.add(part)
-                    index_terms.add(part.title())
-            index_terms.add(title.title())
+                    index_terms.add(smart_title(part))
             index_terms.update(citation_terms(t['source'], t['nums']))
             for term in index_terms:
                 if term:
                     out.write(f'        <d:index d:value="{html_lib.escape(term)}"/>\n')
 
-            out.write(f'        <h1 class="grammar-heading">{html_lib.escape(title.title())}</h1>\n')
+            out.write(f'        <h1 class="grammar-heading">{html_lib.escape(title)}</h1>\n')
             prefix = 'S' if t['source'] == 'Smyth' else 'G'
             out.write(f'        <div class="grammar-citation">{t["source"]} §{html_lib.escape(citation_range(t["nums"]))}</div>\n')
             # Every paragraph gets its own numbered, spaced-out block rather
