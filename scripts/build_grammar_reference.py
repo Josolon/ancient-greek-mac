@@ -707,7 +707,7 @@ def write_pronunciation_guide_entry(out):
     mapping the reconstructed-Attic phonology in scripts/phonology.py onto
     example words in seven other languages, searchable under "pronunciation".
     Modeled on the analogous single-language (Icelandic) table in the sibling
-    project ../ancient-greek-icelandic-mac/scripts/build_xml.py -
+    project ../ancient-greek-icelandic-dictionary/scripts/build_xml.py -
     write_pronunciation_guide_entry - extended here to multiple languages
     since this dictionary's audience isn't assumed to know any one of them.
     Whichever example is the single closest phonetic match for a row is
